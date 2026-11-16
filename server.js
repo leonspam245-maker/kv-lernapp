@@ -19,7 +19,10 @@ const DATA_DIR = path.resolve(ROOT, process.env.DATA_DIR || 'data');
 const DATA_FILE = path.join(DATA_DIR, 'lernapp.json');
 const MAX_BODY = 60 * 1024 * 1024;
 
+// MOCK_SUPABASE=1: Online-Betrieb mit nachgebautem Supabase testen (nur für automatische Tests)
+const MOCK = process.env.MOCK_SUPABASE === '1';
 const STATIC = [
+  ['/vendor/supabase/', MOCK ? path.join(ROOT, 'tests/mock-supabase') : path.join(ROOT, 'node_modules/@supabase/supabase-js/dist/umd')],
   ['/vendor/pdfjs/', path.join(ROOT, 'node_modules/pdfjs-dist/build')],
   ['/vendor/tesseract/', path.join(ROOT, 'node_modules/tesseract.js/dist')],
   ['/vendor/tesseract-core/', path.join(ROOT, 'node_modules/tesseract.js-core')],
@@ -159,6 +162,8 @@ async function handleApi(req, res, urlPath) {
 const server = http.createServer(async (req, res) => {
   const urlPath = new URL(req.url, 'http://localhost').pathname;
   try {
+    // Lokal läuft die App ohne Anmeldung mit Speicherung in data/. public/config.json gilt nur online.
+    if (urlPath === '/config.json') return send(res, 200, MOCK ? { mode: 'cloud', supabaseUrl: 'mock', supabaseKey: 'mock' } : { mode: 'local' });
     if (urlPath.startsWith('/api/')) return await handleApi(req, res, urlPath);
     return await serveStatic(req, res, urlPath);
   } catch (e) {

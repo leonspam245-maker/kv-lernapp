@@ -4,6 +4,7 @@ import { esc, fmtDateTime, todayISO, plural } from './util.js';
 import { toast, confirmDialog } from './ui.js';
 import { rerender } from './app.js';
 import { buildDemoData } from './demo.js';
+import { isCloud, signOut } from './backend.js';
 
 export function settingsView(el) {
   const db = store.db;
@@ -26,8 +27,9 @@ export function settingsView(el) {
     <h3>Einrichtung</h3>
     <ol>
       <li>Auf <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> ein Konto erstellen, Guthaben aufladen und einen API-Schlüssel anlegen.</li>
-      <li>Im Projektordner die Datei <code>.env.example</code> zu <code>.env</code> kopieren und den Schlüssel bei <code>ANTHROPIC_API_KEY=</code> eintragen. Die Datei <code>.env</code> bleibt auf deinem Computer und wird nicht ins Projektarchiv übernommen.</li>
-      <li>Die App neu starten (<code>npm start</code>) und den Dienst hier aktivieren.</li>
+      ${isCloud()
+        ? '<li>Bei Vercel im Projekt «kv-lernapp» unter «Settings» → «Environment Variables» die Variable <code>ANTHROPIC_API_KEY</code> mit deinem Schlüssel anlegen (Typ «Sensitive»). Der Schlüssel bleibt auf dem Server und ist im App-Code nicht sichtbar.</li><li>Unter «Deployments» die neueste Version erneut bereitstellen («Redeploy») und den Dienst hier aktivieren.</li>'
+        : '<li>Im Projektordner die Datei <code>.env.example</code> zu <code>.env</code> kopieren und den Schlüssel bei <code>ANTHROPIC_API_KEY=</code> eintragen. Die Datei <code>.env</code> bleibt auf deinem Computer und wird nicht ins Projektarchiv übernommen.</li><li>Die App neu starten (<code>npm start</code>) und den Dienst hier aktivieren.</li>'}
     </ol>
     <div class="notice ${ai.configured ? 'notice-ok' : 'notice-warn'}">Status: ${ai.configured ? 'API-Schlüssel auf dem Server vorhanden.' : 'Kein API-Schlüssel eingerichtet – KI-Funktionen sind nicht verfügbar.'} ${consent ? `KI-Dienst aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
     ${consent
@@ -38,11 +40,24 @@ export function settingsView(el) {
 
   <section class="card">
     <h2 style="margin-top:0">Daten und Sicherung</h2>
-    <p>Alle Unterlagen und dein Lernfortschritt werden auf dem Computer gespeichert, auf dem die App läuft (Datei <code>data/lernapp.json</code>, mit automatischer Sicherungskopie). Sie bleiben nach einem Neustart erhalten.</p>
+    ${isCloud()
+      ? '<p>Alle Unterlagen und dein Lernfortschritt sind online in deinem Konto gespeichert (Supabase, Rechenzentrum Zürich). Nur du hast nach der Anmeldung Zugriff. Du kannst die App auf jedem Gerät öffnen.</p>'
+      : '<p>Alle Unterlagen und dein Lernfortschritt werden auf dem Computer gespeichert, auf dem die App läuft (Datei <code>data/lernapp.json</code>, mit automatischer Sicherungskopie). Sie bleiben nach einem Neustart erhalten.</p>'}
+    <p class="small muted">Daten aus der lokalen Version übernimmst du so: dort «Sicherung herunterladen», hier «Sicherung einspielen».</p>
     <p class="small muted">${plural(db.subjects.length, 'Fach', 'Fächer')} · ${plural(db.topics.length, 'Thema', 'Themen')} · ${plural(db.sources.length, 'Unterlage', 'Unterlagen')} · ${plural(db.cards.length, 'Karte', 'Karten')} · ${plural(db.attempts.length, 'Übungsdurchgang', 'Übungsdurchgänge')}</p>
     <div class="row"><button class="btn" id="export">Sicherung herunterladen</button>
       <label class="btn">Sicherung einspielen<input type="file" id="import" accept=".json,application/json" hidden></label></div>
   </section>
+
+  ${isCloud() ? `<section class="card">
+    <h2 style="margin-top:0">Als App installieren</h2>
+    <ul>
+      <li><strong>iPhone (Safari):</strong> Teilen-Symbol, dann «Zum Home-Bildschirm».</li>
+      <li><strong>Android (Chrome):</strong> Menü ⋮, dann «App installieren» bzw. «Zum Startbildschirm hinzufügen».</li>
+      <li><strong>Computer (Chrome oder Edge):</strong> In der Adresszeile auf das Installieren-Symbol klicken oder im Menü «App installieren» wählen.</li>
+    </ul>
+    <button class="btn" id="logout">Abmelden</button>
+  </section>` : ''}
 
   <section class="card">
     <h2 style="margin-top:0">Beispieldaten</h2>
@@ -50,6 +65,9 @@ export function settingsView(el) {
     <div class="row">${demoCount ? '<button class="btn btn-danger" id="demo-del">Beispieldaten entfernen</button>' : '<button class="btn" id="demo-add">Beispieldaten laden</button>'}</div>
   </section>`;
 
+  el.querySelector('#logout')?.addEventListener('click', async () => {
+    try { await signOut(); location.reload(); } catch (e) { toast(e.message, 'error'); }
+  });
   el.querySelector('#ai-on')?.addEventListener('click', async () => {
     if (!el.querySelector('#ai-ack').checked) return toast('Bitte zuerst bestätigen, dass du die Hinweise gelesen hast.', 'error');
     try { await commit((d) => { d.settings.aiConsent = true; d.settings.aiConsentAt = new Date().toISOString(); }); toast('KI-Dienst aktiviert. Unterlagen werden nur nach deiner Bestätigung übertragen.'); rerender(); } catch (e) { toast(e.message, 'error'); }

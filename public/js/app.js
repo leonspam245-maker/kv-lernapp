@@ -8,6 +8,8 @@ import { importView } from './import.js';
 import { practiceView, contentView, cardsView } from './practice.js';
 import { planListView, examFormView, examPlanView, toggleUnit, unitStartLink, routeHtml } from './plan.js';
 import { settingsView } from './settings.js';
+import { initBackend, currentUser, isCloud } from './backend.js';
+import { loginView } from './auth.js';
 
 const view = document.getElementById('view');
 export const today = () => todayISO();
@@ -34,6 +36,7 @@ let leaveGuard = null;
 export const setLeaveGuard = (fn) => { leaveGuard = fn; };
 
 export function route() {
+  if (!store.db) return;
   const hash = location.hash.replace(/^#\/?/, '');
   const [path, qs] = hash.split('?');
   const query = Object.fromEntries(new URLSearchParams(qs || ''));
@@ -442,9 +445,17 @@ function sourceView(el, id, query) {
 // ---------- Start ----------
 (async function init() {
   try {
-    await loadAll();
-    route();
+    await initBackend();
+    const user = await currentUser();
+    const start = async () => { await loadAll(); route(); };
+    if (!user) { loginView(view, start); return; }
+    await start();
   } catch (e) {
-    view.innerHTML = `<div class="notice notice-bad"><h4>Die Lernapp konnte nicht starten.</h4><p>${esc(e.message)}</p><p>Prüfe, ob der Server läuft (Befehl <code>npm start</code>), und lade die Seite neu.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`;
+    view.innerHTML = `<div class="notice notice-bad"><h4>Die Lernapp konnte nicht starten.</h4><p>${esc(e.message)}</p><p>${isCloud() ? 'Prüfe deine Internetverbindung' : 'Prüfe, ob der Server läuft (Befehl <code>npm start</code>)'} und lade die Seite neu.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`;
   }
 })();
+
+// Als App installierbar (Startbildschirm, Startmenü): Service Worker registrieren
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('/sw.js').catch(() => { /* ohne Installierbarkeit weiter nutzbar */ });
+}

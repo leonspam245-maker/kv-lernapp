@@ -1,16 +1,15 @@
-// Datenhaltung im Browser mit Speicherung auf dem lokalen Server (data/lernapp.json).
+// Datenhaltung im Browser. Gespeichert wird lokal (data/lernapp.json) oder online in Supabase (siehe backend.js).
 import { toast, showSaveState } from './ui.js';
+import { getState, putState, getVersion, getStatus } from './backend.js';
 // Schlägt das Speichern fehl, wird die Änderung zurückgenommen: Die Anzeige zeigt immer den gespeicherten Stand.
 
 export const store = { db: null, version: 0, server: { ocrAvailable: false, ai: { configured: false } } };
 
 export async function loadAll() {
-  const [stateRes, statusRes] = await Promise.all([fetch('/api/state'), fetch('/api/status')]);
-  if (!stateRes.ok) throw new Error('Die gespeicherten Daten konnten nicht geladen werden.');
-  const state = await stateRes.json();
+  const [state, status] = await Promise.all([getState(), getStatus()]);
   store.db = migrate(state.data);
   store.version = state.version;
-  if (statusRes.ok) store.server = await statusRes.json();
+  store.server = status;
 }
 
 function migrate(data) {
@@ -26,9 +25,7 @@ let chain = Promise.resolve();
 export const sync = { onExternalChange: null };
 
 async function fetchState() {
-  const res = await fetch('/api/state');
-  if (!res.ok) throw new Error('Der aktuelle Stand konnte nicht geladen werden.');
-  const state = await res.json();
+  const state = await getState();
   return { data: migrate(state.data), version: state.version };
 }
 
@@ -47,16 +44,14 @@ export function commit(mutator) {
       for (let attempt = 0; attempt < 3; attempt++) {
         mutator(store.db);
         showSaveState('saving');
-        const res = await fetch('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseVersion: store.version, data: store.db }) });
-        const body = await res.json().catch(() => ({}));
-        if (res.status === 409) {
+        const result = await putState(store.version, store.db);
+        if (result.conflict) {
           // Anderes Gerät war schneller: aktuellen Stand holen und Änderung darauf anwenden
           const fresh = await fetchState();
           store.db = fresh.data; store.version = fresh.version; merged = true;
           continue;
         }
-        if (!res.ok) throw new Error(body.error || `Server antwortet mit Fehler ${res.status}`);
-        store.version = body.version;
+        store.version = result.version;
         showSaveState('saved');
         if (merged) {
           toast('Änderungen von einem anderen Gerät wurden übernommen und deine Änderung ergänzt.', 'info');
@@ -69,7 +64,7 @@ export function commit(mutator) {
       if (!merged) { store.db = snapshot; store.version = snapshotVersion; }
       else { try { const fresh = await fetchState(); store.db = fresh.data; store.version = fresh.version; } catch { store.db = snapshot; store.version = snapshotVersion; } }
       showSaveState('error');
-      if (e instanceof TypeError) throw new Error('Keine Verbindung zum Lernapp-Server. Läuft «npm start» noch?');
+      if (e instanceof TypeError) throw new Error('Keine Verbindung zum Speicher. Internetverbindung prüfen (lokal: läuft «npm start» noch?).');
       throw e;
     }
   };
@@ -84,7 +79,7 @@ export function commit(mutator) {
  */
 export async function refreshIfStale() {
   let latest;
-  try { latest = (await (await fetch('/api/version')).json()).version; } catch { return false; }
+  try { latest = await getVersion(); } catch { return false; }
   if (latest === store.version) return false;
   const run = async () => {
     const fresh = await fetchState();

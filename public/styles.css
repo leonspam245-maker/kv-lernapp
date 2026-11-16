@@ -368,3 +368,15 @@ code { background: var(--paper-2); padding: 1px 5px; border-radius: 4px; font-si
 /* Karteikarte in Lesebreite */
 .flashcard, .rate, .flashcard ~ .small { max-width: 760px; margin-left: auto; margin-right: auto; }
 .flashcard { margin-top: 8px; margin-bottom: 18px; }
+
+/* ---------- Anmeldung (Online-Betrieb) ---------- */
+body.auth-mode .nav { display: none; }
+body.auth-mode main { margin: 0 auto; max-width: 1040px; padding-bottom: 40px; }
+.auth { display: grid; gap: 28px; align-items: center; min-height: calc(100vh - 56px - 64px); }
+.auth-intro { background: var(--ink); color: var(--paper); margin: -24px -16px 0; padding: 32px 20px 30px; }
+.auth-form { max-width: 440px; width: 100%; }
+@media (min-width: 900px) {
+  .auth { grid-template-columns: 1.1fr 1fr; gap: 56px; }
+  .auth-intro { margin: 0; padding: 48px 44px; border-radius: var(--r-m); align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+}
+input[type=email], input[type=password] { width: 100%; min-height: 46px; padding: 10px 12px; border: 1.5px solid var(--line-strong); border-radius: var(--r-s); background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }

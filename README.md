@@ -2,7 +2,19 @@
 
 Persönliche Lernapp für die KV-Lehre: Unterlagen pro Fach und Thema sammeln, mit Merkblatt, Karteikarten, Quiz und Probeprüfung üben und einen realistischen Lernplan bis zur Prüfung erstellen. Die App läuft lokal auf deinem Computer und kann auch auf dem Handy im selben WLAN genutzt werden.
 
-## Starten
+## Online nutzen (empfohlen)
+
+Die Lernapp läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentrum Zürich). Du meldest dich mit E-Mail und Passwort an und kannst die App auf Handy und Computer als App installieren:
+
+- **iPhone (Safari):** Teilen-Symbol, dann «Zum Home-Bildschirm».
+- **Android (Chrome):** Menü ⋮, dann «App installieren».
+- **Computer (Chrome/Edge):** Installieren-Symbol in der Adresszeile.
+
+Beim ersten Öffnen richtest du über «Konto einrichten» dein Konto ein. Danach ist die Registrierung geschlossen; weitere Konten werden von der Datenbank abgelehnt.
+
+Technik: `public/config.json` enthält die öffentliche Supabase-Adresse und den publishable Key (dieser Schlüssel ist für den Browser gedacht; geschützt wird über Anmeldung und Row Level Security). `vercel.json` und `scripts/build-vercel.mjs` steuern das Hosting, `api/` enthält die Vercel-Funktionen. Für den optionalen KI-Dienst wird `ANTHROPIC_API_KEY` als Umgebungsvariable bei Vercel hinterlegt.
+
+## Lokal starten (ohne Internet, ohne Anmeldung)
 
 Voraussetzung: [Node.js](https://nodejs.org) ab Version 20.
 
@@ -70,6 +82,8 @@ npm test
 ```bash
 npm run e2e
 ```
+
+`npm run e2e:cloud` prüft den Online-Betrieb (Anmeldung, Cloud-Speicher, Konflikte, Installierbarkeit) mit einem nachgebauten Supabase.
 
 `npm test` prüft die Lernplan-, Wiederholungs- und Generatorlogik. `npm run e2e` braucht Playwright mit Chromium. Der Test spielt alle vier Importwege (inklusive Word-Datei), Merkblatt, Quiz, Probeprüfung, Lernplan, Karteikarten, einen Neustart, zwei gleichzeitig genutzte Geräte und die Handy-Ansicht mit den Beispieldateien aus `samples/` durch. Er verwendet einen eigenen Datenordner (`test-data/`) und legt Screenshots in `screenshots/` ab.
 

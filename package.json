@@ -9,13 +9,16 @@
     "test": "node --test tests/unit.test.js",
     "e2e": "node tests/e2e.mjs",
     "handy": "node server.js --handy",
-    "beispiel-pdf": "python3 scripts/make-sample-pdf.py && python3 scripts/make-sample-docx.py"
+    "beispiel-pdf": "python3 scripts/make-sample-pdf.py && python3 scripts/make-sample-docx.py",
+    "e2e:cloud": "node tests/e2e-cloud.mjs",
+    "build": "node scripts/build-vercel.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
+    "@supabase/supabase-js": "^2.119.0",
     "@tesseract.js-data/deu": "^1.0.0",
     "pdfjs-dist": "^4.10.38",
     "tesseract.js": "^6.0.1"

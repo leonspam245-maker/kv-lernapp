@@ -5,6 +5,7 @@ import { toast, confirmDialog, refChips, originBadge, emptyState, renderMarkdown
 import { buildMerkblatt, buildCards, buildQuestions, grade, swissGrade } from './gen.js';
 import { newCard, rateCard, sessionQueue, REINSERT_AFTER } from './srs.js';
 import { rerender } from './app.js';
+import { accessToken } from './backend.js';
 
 const TYPE = { merkblatt: 'Merkblatt', quiz: 'Quiz', exam: 'Probeprüfung' };
 const aiReady = () => store.server.ai?.configured && store.db.settings.aiConsent;
@@ -94,7 +95,10 @@ async function callAi(type, sources, subjectId) {
     })),
   };
   let res;
-  try { res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
+  try {
+    const token = await accessToken();
+    res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) });
+  }
   catch { throw new Error('Keine Verbindung zum Lernapp-Server.'); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `KI-Anfrage fehlgeschlagen (${res.status}).`);

@@ -1,2 +1,18 @@
-{ "name": "KV-Lernapp", "short_name": "Lernapp", "start_url": "/", "display": "standalone", "background_color": "#F7F6F2", "theme_color": "#20242B", "lang": "de-CH",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }] }
+{
+  "name": "KV-Lernapp",
+  "short_name": "Lernapp",
+  "description": "Unterlagen sammeln, mit Karteikarten und Quiz üben und den Lernplan bis zur Prüfung im Blick behalten.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#20242B",
+  "theme_color": "#20242B",
+  "lang": "de-CH",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
