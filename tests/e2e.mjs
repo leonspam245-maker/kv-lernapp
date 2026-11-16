@@ -308,7 +308,7 @@ try {
     const p2 = await ctx2.newPage();
     await p2.goto(BASE + '/#/'); await p2.waitForSelector('main h1');
     const text = await p2.innerText('main');
-    assert.match(text, /Nächste Prüfung/i);
+    assert.match(text, /Tage bis zur Prüfung/i);
     assert.match(text, /W&G-Prüfung Vertragsrecht/);
     assert.match(text, /\b1 von \d+ Einheiten erledigt/);
     await p2.screenshot({ path: path.join(SHOTS, '11-start-nach-neustart.png'), fullPage: true });

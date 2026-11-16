@@ -78,7 +78,7 @@ export function extract(source) {
       if (!line) continue;
       if (line.startsWith('#')) { heading = line.replace(/^#+\s*/, ''); continue; }
       const t = stripBullet(line);
-      if (isGoals) { if (wordCount(t) >= 3) res.goals.push({ text: t, refs: ref(seg.page), topicId: source.topicId }); continue; }
+      if (isGoals) { if (wordCount(t) >= 3 && !/^lernziele?\b/i.test(t)) res.goals.push({ text: t, refs: ref(seg.page), topicId: source.topicId }); continue; }
       // Kurze Zeile ohne Satzzeichen = Zwischentitel (typisch in PDFs)
       if (!/^[-•*–]/.test(line) && wordCount(t) <= 7 && t.length < 60 && !/[.:,;!?]$/.test(t) && !/[:–—]\s/.test(t) && /^[A-ZÄÖÜ0-9]/.test(t)) { heading = t; continue; }
 

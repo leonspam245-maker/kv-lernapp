@@ -63,6 +63,39 @@ export function unitStartLink(exam, u) {
   return db.cards.some((c) => c.topicId === u.topicId) ? `#/karten?themen=${u.topicId}&alle=1` : `#/ueben?fach=${exam.subjectId}&themen=${u.topicId}`;
 }
 
+// ---------- Route bis zur Prüfung ----------
+/**
+ * Lernplan als Strecke: jeder Tag eine Station, die Prüfung das Ziel.
+ * Gefüllt = erledigt, halb = teilweise, Ring = offen, unterbrochen = gesperrt.
+ */
+export function routeHtml(exam, { dark = false } = {}) {
+  const t = todayISO();
+  const plan = exam.plan || { units: [], days: [] };
+  const blocked = new Map((exam.blocked || []).map((b) => [b.date, b.reason]));
+  const stops = [];
+  for (let d = t; d < exam.date; d = addDays(d, 1)) stops.push(d);
+  const label = (d) => fmtDateShort(d).split(',')[0];
+  const items = stops.map((d) => {
+    const us = plan.units.filter((u) => u.date === d);
+    const doneN = us.filter((u) => u.done).length;
+    const min = us.reduce((s, u) => s + u.minutes, 0);
+    let state = 'free'; let info = 'frei';
+    if (blocked.has(d)) { state = 'blocked'; info = blocked.get(d); }
+    else if (us.length && doneN === us.length) { state = 'done'; info = 'erledigt'; }
+    else if (doneN) { state = 'partial'; info = `${doneN}/${us.length}`; }
+    else if (us.length) { state = 'open'; info = `${min} Min.`; }
+    const title = `${fmtDateLong(d)}: ${blocked.has(d) ? `gesperrt (${blocked.get(d)})` : us.length ? `${plural(us.length, 'Einheit', 'Einheiten')}, ${min} Min., ${doneN} erledigt` : 'keine Einheit'}`;
+    return `<li class="stop is-${state}${d === t ? ' is-today' : ''}"><a href="#/pruefung/${exam.id}?tag=${d}" title="${esc(title)}" aria-label="${esc(title)}">
+      <span class="stop-dot" aria-hidden="true"></span>
+      <span class="stop-day">${d === t ? 'Heute' : label(d)}</span>
+      <span class="stop-date">${d.slice(8)}.${d.slice(5, 7)}.</span>
+      <span class="stop-info">${esc(info)}</span></a></li>`;
+  }).join('');
+  return `<ol class="route${dark ? ' route-dark' : ''}" aria-label="Lerntage bis zur Prüfung">${items}
+    <li class="stop is-goal"><a href="#/pruefung/${exam.id}" aria-label="Prüfung am ${fmtDateLong(exam.date)}">
+      <span class="stop-dot" aria-hidden="true"></span><span class="stop-day">Prüfung</span><span class="stop-date">${exam.date.slice(8)}.${exam.date.slice(5, 7)}.</span><span class="stop-info">Ziel</span></a></li></ol>`;
+}
+
 // ---------- Übersicht ----------
 export function planListView(el) {
   const db = store.db; const t = todayISO();
@@ -160,7 +193,7 @@ export function examFormView(el, id) {
 }
 
 // ---------- Plan-Ansicht ----------
-export function examPlanView(el, id) {
+export function examPlanView(el, id, query = {}) {
   const exam = byId('exams', id);
   if (!exam) { el.innerHTML = emptyState('Prüfung nicht gefunden', '', '<a class="btn" href="#/plan">Zum Lernplan</a>'); return; }
   const t = todayISO();
@@ -177,9 +210,10 @@ export function examPlanView(el, id) {
   el.innerHTML = `<div class="page-head"><div><div class="eyebrow"><a href="#/plan">Lernplan</a> · ${esc(subjectName(exam.subjectId))}</div><h1>${esc(exam.title)} ${demoBadge(exam)}</h1>
       <p>${fmtDateLong(exam.date)}${left >= 0 ? ` · ${left === 0 ? 'heute' : `in ${plural(left, 'Tag', 'Tagen')}`}` : ' · vorbei'}</p></div>
       <div class="row no-print"><button class="btn btn-primary" id="recalc">Neu berechnen</button><a class="btn" href="#/pruefung/${id}/bearbeiten">Bearbeiten</a></div></div>
+    ${left > 0 ? `<div class="route-wrap">${routeHtml(exam)}</div>` : ''}
     <section class="card"><div class="grid grid-3">
       <div><div class="big-number">${done.length}<span class="muted" style="font-size:1rem"> / ${units.length}</span></div><div class="meta">Einheiten erledigt</div></div>
-      <div><div class="big-number">${Math.round(minutes / 6) / 10}</div><div class="meta">Stunden geplant</div></div>
+      <div><div class="big-number">${Math.floor(minutes / 60)}<span class="muted" style="font-size:1rem"> Std. </span>${String(minutes % 60).padStart(2, '0')}</div><div class="meta">Lernzeit geplant</div></div>
       <div><div class="big-number">${exam.topicIds.length}</div><div class="meta">Themen${exam.difficultTopicIds?.length ? `, ${exam.difficultTopicIds.length} schwierig` : ''}</div></div></div>
       <div style="margin-top:12px">${progressBar(done.length, units.length, 'Fortschritt')}</div>
       <p class="small muted" style="margin-top:10px">Themen: ${exam.topicIds.map((tid) => `${esc(topicName(tid))}${exam.difficultTopicIds?.includes(tid) ? ' (schwierig)' : ''}`).join(', ')}. Zuletzt berechnet: ${fmtDate(plan.generatedAt)}.</p>
@@ -204,6 +238,10 @@ export function examPlanView(el, id) {
     <p class="no-print"><button class="btn btn-danger btn-small" id="del">Prüfung und Lernplan löschen</button></p>`;
 
   bindUnitChecks(el);
+  if (query.tag) {
+    const target = el.querySelector(`#tag-${CSS.escape(query.tag)}`);
+    if (target) setTimeout(() => { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); target.classList.add('highlight'); }, 50);
+  }
   el.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => {
     const u = units.find((x) => x.id === b.dataset.move);
     const box = b.parentElement;

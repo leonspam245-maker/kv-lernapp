@@ -124,3 +124,9 @@ test('Neuberechnung: Erledigtes und Verschobenes bleibt, Quizfehler erhöhen Wie
   assert.ok(!next.units.some((u) => u.topicId === done.topicId && u.kind === 'erarbeiten' && !u.done), 'kein zweites Erarbeiten');
   assert.ok(next.units.some((u) => u.topicId === done.topicId && u.focusMistakes), 'Fehler werden nachgearbeitet');
 });
+
+test('Lernziele: Titelzeile ist kein Lernziel', () => {
+  const src = { id: 'g', title: 'LZ', origin: 'mykv', kind: 'lernziele', topicId: 't', content: 'Lernziele Vertragsentstehung (Beispiel)\n- Ich kann Antrag und Annahme erklären.' };
+  const goals = extract(src).goals.map((g) => g.text);
+  assert.deepEqual(goals, ['Ich kann Antrag und Annahme erklären.']);
+});

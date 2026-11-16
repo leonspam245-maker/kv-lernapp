@@ -18,6 +18,7 @@ export function toast(message, type = 'success', opts = {}) {
   el.querySelector('.toast-close').onclick = () => el.remove();
   if (opts.action) el.querySelector('.btn-link').onclick = () => { opts.onAction?.(); el.remove(); };
   box.appendChild(el);
+  while (box.children.length > 3) box.firstElementChild.remove(); // höchstens drei Meldungen gleichzeitig
   if (!opts.sticky) setTimeout(() => el.remove(), type === 'error' ? 9000 : 4000);
 }
 
