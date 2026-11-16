@@ -43,9 +43,13 @@ export async function signIn(email, password) {
 }
 export async function signUp(email, password) {
   const { error } = await sb.auth.signUp({ email, password });
-  if (error) throw new Error(authError(error));
   // Das Konto wird serverseitig direkt bestätigt; danach gleich anmelden.
-  await signIn(email, password);
+  // Auch bei einem Fehler (z. B. E-Mail-Versandgrenze) kann das Konto bereits bestehen: Anmeldung versuchen.
+  try {
+    await signIn(email, password);
+  } catch (signInError) {
+    throw new Error(error ? authError(error) : signInError.message);
+  }
 }
 export async function signOut() {
   if (isCloud()) await sb.auth.signOut();
