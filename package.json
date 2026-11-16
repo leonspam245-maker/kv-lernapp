@@ -1,0 +1,23 @@
+{
+  "name": "kv-lernapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Persönliche Lernapp für die KV-Lehre",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/unit.test.js",
+    "e2e": "node tests/e2e.mjs",
+    "handy": "HOST=0.0.0.0 node server.js",
+    "beispiel-pdf": "python3 scripts/make-sample-pdf.py && python3 scripts/make-sample-docx.py"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@tesseract.js-data/deu": "^1.0.0",
+    "pdfjs-dist": "^4.10.38",
+    "tesseract.js": "^6.0.1"
+  }
+}

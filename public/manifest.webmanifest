@@ -1,0 +1,2 @@
+{ "name": "KV-Lernapp", "short_name": "Lernapp", "start_url": "/", "display": "standalone", "background_color": "#F7F6F2", "theme_color": "#20242B", "lang": "de-CH",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }] }

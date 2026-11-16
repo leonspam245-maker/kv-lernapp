@@ -1,0 +1,8 @@
+Kaufvertrag	Der Verkäufer verpflichtet sich, dem Käufer den Kaufgegenstand zu übergeben und ihm das Eigentum daran zu verschaffen; der Käufer bezahlt den Kaufpreis (Art. 184 OR).
+Mietvertrag	Der Vermieter überlässt dem Mieter eine Sache zum Gebrauch; der Mieter bezahlt dafür einen Mietzins (Art. 253 OR).
+Pachtvertrag	Der Verpächter überlässt dem Pächter eine nutzbare Sache zum Gebrauch und zum Bezug der Früchte oder Erträge gegen einen Pachtzins (Art. 275 OR).
+Einfacher Auftrag	Der Beauftragte verpflichtet sich, die ihm übertragenen Geschäfte oder Dienste vertragsgemäss zu besorgen; geschuldet ist sorgfältiges Tätigwerden, kein Erfolg (Art. 394 OR).
+Werkvertrag	Der Unternehmer verpflichtet sich zur Herstellung eines Werkes, der Besteller zur Leistung einer Vergütung; geschuldet ist ein Erfolg (Art. 363 OR).
+Einzelarbeitsvertrag - Der Arbeitnehmer verpflichtet sich auf bestimmte oder unbestimmte Zeit zur Leistung von Arbeit im Dienst des Arbeitgebers gegen Lohn (Art. 319 OR).
+Gebrauchsleihe	Der Verleiher überlässt dem Entlehner eine Sache unentgeltlich zum Gebrauch (Art. 305 OR).
+Hinterlegungsvertrag
