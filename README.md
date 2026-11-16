@@ -20,6 +20,8 @@ npm start
 
 Danach im Browser **http://localhost:5173** öffnen.
 
+**Windows, am einfachsten:** Im Projektordner doppelt auf **«Lernapp starten.cmd»** klicken. Beim ersten Mal werden die benötigten Teile installiert, danach öffnet sich die App automatisch im Browser. Das schwarze Fenster offen lassen, solange du lernst.
+
 ### Auf dem Handy nutzen
 
 Computer und Handy müssen im selben (privaten) WLAN sein.
