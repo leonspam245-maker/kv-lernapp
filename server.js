@@ -13,7 +13,8 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 loadEnvFile(path.join(ROOT, '.env'));
 
 const PORT = Number(process.env.PORT || 5173);
-const HOST = process.env.HOST || '127.0.0.1';
+// «--handy» macht die App im eigenen WLAN erreichbar (funktioniert unter Windows, macOS und Linux)
+const HOST = process.argv.includes('--handy') ? '0.0.0.0' : (process.env.HOST || '127.0.0.1');
 const DATA_DIR = path.resolve(ROOT, process.env.DATA_DIR || 'data');
 const DATA_FILE = path.join(DATA_DIR, 'lernapp.json');
 const MAX_BODY = 60 * 1024 * 1024;

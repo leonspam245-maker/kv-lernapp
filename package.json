@@ -8,7 +8,7 @@
     "start": "node server.js",
     "test": "node --test tests/unit.test.js",
     "e2e": "node tests/e2e.mjs",
-    "handy": "HOST=0.0.0.0 node server.js",
+    "handy": "node server.js --handy",
     "beispiel-pdf": "python3 scripts/make-sample-pdf.py && python3 scripts/make-sample-docx.py"
   },
   "engines": {

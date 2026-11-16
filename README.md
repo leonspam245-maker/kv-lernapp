@@ -28,6 +28,8 @@ Computer und Handy müssen im selben (privaten) WLAN sein.
 npm run handy
 ```
 
+Unter Windows in PowerShell `npm.cmd` statt `npm` schreiben (also `npm.cmd install`, `npm.cmd start`, `npm.cmd run handy`), falls PowerShell die Ausführung von Skripten blockiert. Beim ersten Start im Handy-Modus fragt die Windows-Firewall eventuell nach; erlaube den Zugriff für «Private Netzwerke».
+
 Das Terminal zeigt eine Adresse wie `http://192.168.1.23:5173`. Diese auf dem Handy öffnen und über «Zum Home-Bildschirm» als App ablegen. Im Handy-Modus ist die App für alle Geräte im selben Netzwerk erreichbar. Nutze ihn deshalb nur zu Hause, nicht in einem öffentlichen WLAN.
 
 Computer und Handy greifen auf dieselben Daten zu. Speichern beide Geräte kurz nacheinander, führt die App die Änderungen zusammen, statt sie zu überschreiben. Kehrst du zum Fenster zurück, lädt die App automatisch den neuesten Stand. Laufende Übungen und offene Formulare werden dabei nicht unterbrochen.
