@@ -25,7 +25,15 @@ export async function initBackend() {
 export async function currentUser() {
   if (!isCloud()) return { local: true };
   const { data } = await sb.auth.getSession();
-  return data.session?.user || null;
+  const session = data.session;
+  if (!session) return null;
+  // Gespeicherte Anmeldung beim Server prüfen: gelöschte oder gesperrte Konten kommen nicht mehr in die App.
+  const { data: checked, error } = await sb.auth.getUser();
+  if (checked?.user) return checked.user;
+  const offline = !navigator.onLine || /fetch|network/i.test(error?.message || '') || error?.status === 0;
+  if (offline) return session.user; // ohne Internet: gespeicherte Anmeldung vorläufig weiter nutzen
+  await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+  return null;
 }
 const authError = (error) => {
   const m = error?.message || '';

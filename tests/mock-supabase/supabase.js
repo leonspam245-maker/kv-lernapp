@@ -25,6 +25,12 @@
         db.session = { access_token: 'mock-token', user: { id: u.id, email, user_metadata: u.user_metadata || {} } }; save(db);
         return { data: { session: db.session }, error: null };
       },
+      async getUser() {
+        await delay(); const db = load();
+        const u = db.session && db.users.find((x) => x.id === db.session.user.id);
+        return u ? { data: { user: { id: u.id, email: u.email, user_metadata: u.user_metadata || {} } }, error: null }
+          : { data: { user: null }, error: { message: 'User from sub claim in JWT does not exist', status: 403 } };
+      },
       async signOut() { await delay(); const db = load(); db.session = null; save(db); return { error: null }; },
     };
     const uid = () => load().session?.user.id;

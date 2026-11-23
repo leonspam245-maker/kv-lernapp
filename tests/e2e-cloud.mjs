@@ -109,6 +109,20 @@ try {
     await page.goto(BASE + '/'); await page.waitForSelector('.hero-num');
   });
 
+  await check('Gelöschtes Konto: gespeicherte Anmeldung gilt nicht mehr, Anmeldeseite erscheint', async () => {
+    const ctx3 = await browser.newContext();
+    const p3 = await ctx3.newPage();
+    await p3.goto(BASE + '/');
+    // Konto «weg», aber Anmeldung noch im Browser gespeichert (wie nach dem Löschen in der Datenbank)
+    await p3.evaluate((st) => localStorage.setItem('mock-supabase', JSON.stringify({ ...st, users: [], session: { access_token: 'alt', user: { id: 'u9', email: 'weg@example.ch' } } })), await mockState());
+    await p3.reload();
+    await p3.waitForSelector('#auth-form');
+    assert.equal(await p3.locator('.nav').isVisible(), false);
+    const after = await p3.evaluate(() => JSON.parse(localStorage.getItem('mock-supabase')).session);
+    assert.equal(after, null, 'alte Anmeldung entfernt');
+    await ctx3.close();
+  });
+
   await check('Weitere Konten möglich, jedes sieht nur die eigenen Daten', async () => {
     const other = await browser.newContext();
     const p2 = await other.newPage();
