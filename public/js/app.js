@@ -160,52 +160,53 @@ function homeView(el) {
   const openUnits = units.filter((x) => !x.unit.done);
   const summary = !units.length ? 'Für heute ist nichts geplant.' : minutes ? `${plural(openUnits.length, 'Einheit', 'Einheiten')} offen, etwa ${minutes} Minuten.` : 'Alles erledigt für heute. Gut gemacht.';
 
-  let hero;
+  let hero; let routeTile = '';
   if (nextExam) {
     const left = diffDays(t, nextExam.date);
     const all = nextExam.plan?.units || [];
     const done = all.filter((u) => u.done).length;
     hero = `<section class="hero" aria-labelledby="hero-title">
       <p class="hero-date">${fmtDateLong(t)}</p>
-      <h1 class="hero-count" id="hero-title"><span class="hero-num">${left}</span><span class="hero-text">${left === 1 ? 'Tag' : 'Tage'} bis zur Prüfung<br><strong>${esc(nextExam.title)}</strong></span></h1>
-      <p class="hero-meta">${esc(subjectName(nextExam.subjectId))}, ${fmtDateLong(nextExam.date)}. ${done} von ${plural(all.length, 'Einheit', 'Einheiten')} erledigt. ${demoBadge(nextExam)}</p>
-      <div class="route-wrap">${routeHtml(nextExam, { dark: true })}</div>
+      <h1 class="hero-count" id="hero-title"><span class="hero-num">${left}</span><span class="hero-text">${left === 1 ? 'Tag' : 'Tage'} bis zur Prüfung</span></h1>
+      <p class="hero-sub">${esc(nextExam.title)} ${demoBadge(nextExam)}</p>
+      <p class="hero-meta">${esc(subjectName(nextExam.subjectId))}, ${fmtDateLong(nextExam.date)}. ${done} von ${plural(all.length, 'Einheit', 'Einheiten')} erledigt.</p>
+      <div class="hero-ctas"><a class="btn btn-primary" href="#/pruefung/${nextExam.id}">Lernplan ansehen</a>${dueTotal ? `<a class="btn" href="#/karten?themen=${[...dueByTopic.keys()].join(',')}">Karten üben</a>` : `<a class="btn" href="#/ueben">Üben</a>`}</div>
     </section>`;
+    routeTile = `<section class="tile tile-route" aria-label="Dein Weg zur Prüfung"><div class="tile-head"><h2>Dein Weg zur Prüfung</h2><a class="link-more" href="#/pruefung/${nextExam.id}">Ganzer Plan</a></div><div class="route-wrap">${routeHtml(nextExam)}</div></section>`;
   } else {
     hero = `<section class="hero hero-empty" aria-labelledby="hero-title">
       <p class="hero-date">${fmtDateLong(t)}</p>
       <h1 class="hero-title" id="hero-title">Wann ist deine nächste Prüfung?</h1>
       <p class="hero-meta">Erfasse Datum, Themen und deine freie Zeit. Die App plant den Weg dorthin.</p>
-      <a class="btn btn-light" href="#/pruefung/neu">Prüfung erfassen</a>
+      <div class="hero-ctas"><a class="btn btn-primary" href="#/pruefung/neu">Prüfung erfassen</a><a class="btn" href="#/import">Material importieren</a></div>
     </section>`;
   }
 
-  el.innerHTML = `${hero}
-    <div class="home-grid">
-      <section class="today" aria-labelledby="h-today">
-        <div class="section-head"><h2 id="h-today">Heute lernen</h2><p>${summary}</p></div>
+  el.innerHTML = `${hero}${routeTile}
+    <div class="home-grid bento">
+      <section class="tile tile-today today" aria-labelledby="h-today">
+        <div class="tile-head"><h2 id="h-today">Heute lernen</h2></div>
+        <p class="tile-lead">${summary}</p>
         ${units.length ? units.map((x) => unitHtml(x.exam, x.unit, { overdue: x.overdue })).join('') : emptyState('Heute ist frei', db.exams.length ? 'Wiederhole fällige Karten oder geniesse den freien Tag.' : 'Sobald du eine Prüfung erfasst, stehen hier deine Aufgaben.')}
         ${units.some((x) => x.overdue) ? '<p class="small muted" style="margin-top:12px">Überfällige Einheiten kannst du abhaken oder im Lernplan mit «Neu berechnen» neu verteilen.</p>' : ''}
       </section>
-      <aside class="side">
-        <section class="panel" aria-labelledby="h-due">
-          <h2 id="h-due">Fällige Karten</h2>
-          ${dueTotal ? `<p class="panel-figure"><span class="figure">${dueTotal}</span> zum Wiederholen</p>
-            <ul class="list">${[...dueByTopic].map(([tid, n]) => `<li><a class="list-link" href="#/karten?themen=${tid}"><span><span class="title">${esc(topicName(tid))}</span><br><span class="meta">${esc(subjectName(byId('topics', tid)?.subjectId))}</span></span><span class="badge badge-accent">${n}</span></a></li>`).join('')}</ul>
-            <a class="btn btn-primary btn-block" href="#/karten?themen=${[...dueByTopic.keys()].join(',')}">Fällige Karten üben</a>`
-            : `<p class="muted">Keine Karten fällig.${db.cards.length ? '' : ' Importiere Quizlet-Karten oder erstelle Karten aus deinen Unterlagen.'}</p>`}
-        </section>
-        ${weak.length ? `<section class="panel" aria-labelledby="h-weak"><h2 id="h-weak">Hier machst du noch Fehler</h2><ul class="list">${weak.map((w) => `<li><a class="list-link" href="#/thema/${w.tp.id}"><span class="title">${esc(w.tp.name)}</span><span class="badge badge-bad">${Math.round(w.st.errorRate * 100)} % falsch</span></a></li>`).join('')}</ul></section>` : ''}
-        <section class="panel" aria-labelledby="h-more">
-          <h2 id="h-more">Deine Sammlung</h2>
-          <ul class="list link-list">
-            <li><a class="list-link" href="#/faecher"><span class="title">Fächer und Unterlagen</span><span class="meta">${plural(db.subjects.length, 'Fach', 'Fächer')}, ${plural(db.sources.length, 'Unterlage', 'Unterlagen')}</span></a></li>
-            <li><a class="list-link" href="#/import"><span class="title">Material importieren</span><span class="meta">PDF, myKV, Quizlet, OneNote</span></a></li>
-            <li><a class="list-link" href="#/ueben"><span class="title">Üben</span><span class="meta">Merkblatt, Quiz, Probeprüfung</span></a></li>
-            <li><a class="list-link" href="#/plan"><span class="title">Lernplan</span><span class="meta">${plural(db.exams.length, 'Prüfung', 'Prüfungen')}</span></a></li>
-          </ul>
-        </section>
-      </aside>
+      <section class="tile tile-dark" aria-labelledby="h-due">
+        <h2 id="h-due">Fällige Karten</h2>
+        ${dueTotal ? `<p class="tile-figure"><span class="figure">${dueTotal}</span><span>zum Wiederholen</span></p>
+          <ul class="list">${[...dueByTopic].map(([tid, n]) => `<li><a class="list-link" href="#/karten?themen=${tid}"><span class="title">${esc(topicName(tid))}</span><span class="badge badge-accent">${n}</span></a></li>`).join('')}</ul>
+          <a class="btn btn-primary btn-block" href="#/karten?themen=${[...dueByTopic.keys()].join(',')}">Fällige Karten üben</a>`
+          : `<p class="tile-figure"><span class="figure">0</span><span>Alles wiederholt.</span></p><p class="muted">${db.cards.length ? 'Morgen kommen neue Karten dran.' : 'Importiere Quizlet-Karten oder erstelle Karten aus deinen Unterlagen.'}</p>`}
+      </section>
+      ${weak.length ? `<section class="tile" aria-labelledby="h-weak"><h2 id="h-weak">Hier machst du noch Fehler</h2><ul class="list">${weak.map((w) => `<li><a class="list-link" href="#/thema/${w.tp.id}"><span class="title">${esc(w.tp.name)}</span><span class="badge badge-bad">${Math.round(w.st.errorRate * 100)} % falsch</span></a></li>`).join('')}</ul></section>` : ''}
+      <section class="tile" aria-labelledby="h-more">
+        <h2 id="h-more">Deine Sammlung</h2>
+        <ul class="list link-list">
+          <li><a class="list-link" href="#/faecher"><span class="title">Fächer und Unterlagen</span><span class="meta">${plural(db.subjects.length, 'Fach', 'Fächer')}, ${plural(db.sources.length, 'Unterlage', 'Unterlagen')}</span></a></li>
+          <li><a class="list-link" href="#/import"><span class="title">Material importieren</span><span class="meta">PDF, myKV, Quizlet, OneNote</span></a></li>
+          <li><a class="list-link" href="#/ueben"><span class="title">Üben</span><span class="meta">Merkblatt, Quiz, Probeprüfung</span></a></li>
+          <li><a class="list-link" href="#/plan"><span class="title">Lernplan</span><span class="meta">${plural(db.exams.length, 'Prüfung', 'Prüfungen')}</span></a></li>
+        </ul>
+      </section>
     </div>`;
   bindUnitChecks(el);
 }
