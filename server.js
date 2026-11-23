@@ -190,7 +190,9 @@ async function handleApi(req, res, urlPath) {
     if (!settings.aiConsent) return send(res, 403, { error: 'Der KI-Dienst ist nicht aktiviert. Aktiviere ihn zuerst unter «Einstellungen».' });
     const body = await readBody(req);
     try {
-      const result = await generateWithAi({ ...body, provider: settings.aiProvider || 'claude' });
+      const { apiKey: _ignored, ...request } = body || {};
+      // Eigener Schlüssel der Person, nur für diese Anfrage (wird nicht gespeichert)
+      const result = await generateWithAi({ ...request, provider: settings.aiProvider || 'claude', apiKey: req.headers['x-ai-key'] });
       return send(res, 200, result);
     } catch (e) {
       return send(res, e.status || 502, { error: e.message || 'Die KI-Anfrage ist fehlgeschlagen.' });
@@ -221,6 +223,5 @@ server.listen(PORT, HOST, () => {
     console.log('Hinweis: Im Handy-Modus ist die App für alle Geräte im selben Netzwerk erreichbar. Nur im privaten WLAN verwenden.');
   }
   console.log(`Daten: ${DATA_DIR}`);
-  const ai = aiStatus().providers;
-  console.log(`KI-Dienst: Claude ${ai.claude.configured ? 'eingerichtet' : 'nicht eingerichtet'}, ChatGPT ${ai.chatgpt.configured ? 'eingerichtet' : 'nicht eingerichtet'} (optional, Aktivierung in der App nötig)\n`);
+  console.log('KI-Dienst: optional, jede Person hinterlegt ihren eigenen Schlüssel in der App (Einstellungen)\n');
 });

@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -21,9 +22,24 @@ fs.rmSync(DATA_DIR, { recursive: true, force: true });
 fs.mkdirSync(SHOTS, { recursive: true });
 const sample = (f) => path.join(ROOT, 'samples', f);
 
+// Nachgebauter OpenAI-Server: zeichnet auf, mit welchem Schlüssel angefragt wurde
+const MOCK_AI_PORT = PORT + 7;
+const aiCalls = [];
+const mockAi = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c));
+  req.on('end', () => {
+    const body = JSON.parse(b || '{}');
+    aiCalls.push({ auth: req.headers.authorization, model: body.model });
+    const content = JSON.stringify({ questions: [{ type: 'mc', topicId: 'x', prompt: '[KI-Test] Was ist ein Antrag?', options: ['Verbindliches Angebot', 'Unverbindliche Anfrage', 'Rechnung', 'Mahnung'], answer: 0, answerBool: null, pairs: null, model: null, keywords: null, explanation: 'Ein Antrag bindet den Antragsteller.', points: 1, refs: [], uncertain: null }] });
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 1, model: body.model, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content, refusal: null } }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
+  });
+});
+await new Promise((r) => mockAi.listen(MOCK_AI_PORT, r));
+
 let server;
 async function startServer() {
-  server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR, ANTHROPIC_API_KEY: '' }, stdio: 'pipe' });
+  server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR, ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', OPENAI_BASE_URL: `http://localhost:${MOCK_AI_PORT}/v1` }, stdio: 'pipe' });
   for (let i = 0; i < 50; i++) { try { if ((await fetch(BASE + '/api/status')).ok) return; } catch { /* warten */ } await new Promise((r) => setTimeout(r, 100)); }
   throw new Error('Server startet nicht');
 }
@@ -381,6 +397,42 @@ try {
     assert.equal(saved.last, todayIso);
   });
 
+  // ---------- 9c. Eigener KI-Schlüssel ----------
+  await check('KI: jede Person nutzt den eigenen Schlüssel; er bleibt im Browser und landet nicht auf dem Server', async () => {
+    const KEY = 'sk-test-leon-0123456789abcdefghijKLMN';
+    await go('#/einstellungen');
+    await page.click('[data-provider="chatgpt"]');
+    await page.waitForSelector('#key-form');
+    assert.equal(await page.locator('#ai-on').isDisabled(), true, 'ohne Schlüssel nicht aktivierbar');
+    await page.fill('#key-input', 'sk-ant-falscher-anbieter-0123456789');
+    await page.click('#key-save');
+    assert.match(await toastText(), /nicht nach einem OpenAI-Schlüssel/);
+    await page.fill('#key-input', KEY); await page.click('#key-save');
+    await page.waitForSelector('#key-del');
+    const shown = await page.innerText('main');
+    assert.ok(!shown.includes(KEY), 'Schlüssel nicht vollständig angezeigt');
+    assert.match(shown, /sk-…KLMN/);
+    await page.check('#ai-ack'); await page.click('#ai-on');
+    await page.waitForSelector('#ai-off');
+    const topic = (await state()).topics.find((t) => t.name === 'Vertragsarten');
+    await go(`#/ueben?themen=${topic.id}`);
+    assert.match(await page.innerText('main'), /an OpenAI übertragen; abgerechnet wird über deinen eigenen Schlüssel/);
+    await page.check('input[name=engine][value=ki]');
+    await page.click('[data-make="quiz"]');
+    await page.click('.dialog button[value=yes]');
+    await page.waitForSelector('.question');
+    assert.match(await page.innerText('main'), /\[KI-Test\] Was ist ein Antrag/);
+    assert.equal(aiCalls.at(-1).auth, `Bearer ${KEY}`, 'Anfrage mit dem eigenen Schlüssel');
+    // Ohne mitgeschickten Schlüssel lehnt der Server ab (kein gemeinsamer Schlüssel)
+    const noKey = await fetch(BASE + '/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', cookie: await cookieOf(ctx) }, body: JSON.stringify({ type: 'quiz', subjectName: 'W&G', topics: [], sources: [{ id: 's', title: 't', origin: 'x', topicId: 't', content: 'x' }] }) });
+    assert.equal(noKey.status, 400);
+    assert.match((await noKey.json()).error, /eigener API-Schlüssel/);
+    // Schlüssel nirgends auf dem Server gespeichert
+    const files = fs.readdirSync(DATA_DIR, { recursive: true }).map(String).filter((f) => f.endsWith('.json'));
+    for (const f of files) assert.ok(!fs.readFileSync(path.join(DATA_DIR, f), 'utf8').includes('sk-test-leon'), `Schlüssel in ${f}`);
+    await page.screenshot({ path: path.join(SHOTS, '12-ki-eigener-schluessel.png'), fullPage: true });
+  });
+
   // ---------- 10. Wiederöffnen ----------
   await check('Wiederöffnen nach Server-Neustart: Material und Lernfortschritt vorhanden', async () => {
     const before = await state();
@@ -493,6 +545,8 @@ try {
     assert.equal(own.subjects.length, 0, 'neues Konto startet leer');
     assert.equal((await state()).subjects.length, 3, 'erstes Konto unverändert');
     await p3.goto(BASE + '/#/einstellungen'); await p3.waitForSelector('#logout2');
+    await p3.click('[data-provider="chatgpt"]'); await p3.waitForSelector('#key-form');
+    assert.equal(await p3.locator('#key-del').count(), 0, 'kein Schlüssel einer anderen Person');
     assert.match(await p3.innerText('main'), /mia@example\.ch/);
     await p3.click('#logout2');
     await p3.waitForSelector('#auth-form');
@@ -507,5 +561,6 @@ try {
 } finally {
   await browser.close();
   await stopServer();
+  mockAi.close();
   console.log(`\n${results.filter((r) => r[0] === 'OK  ').length}/${results.length} Prüfungen bestanden. Screenshots: screenshots/`);
 }

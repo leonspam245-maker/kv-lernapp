@@ -12,7 +12,7 @@ Die Lernapp läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentru
 
 Über «Konto einrichten» kann sich jede Person ein eigenes Konto anlegen. Jedes Konto sieht nur die eigenen Unterlagen und den eigenen Lernstand (Row Level Security in der Datenbank).
 
-Technik: `public/config.json` enthält die öffentliche Supabase-Adresse und den publishable Key (dieser Schlüssel ist für den Browser gedacht; geschützt wird über Anmeldung und Row Level Security). `vercel.json` und `scripts/build-vercel.mjs` steuern das Hosting, `api/` enthält die Vercel-Funktionen. Für den optionalen KI-Dienst wird `ANTHROPIC_API_KEY` (Claude) und/oder `OPENAI_API_KEY` (ChatGPT) als Umgebungsvariable bei Vercel hinterlegt; danach ein Redeploy auslösen.
+Technik: `public/config.json` enthält die öffentliche Supabase-Adresse und den publishable Key (dieser Schlüssel ist für den Browser gedacht; geschützt wird über Anmeldung und Row Level Security). `vercel.json` und `scripts/build-vercel.mjs` steuern das Hosting, `api/` enthält die Vercel-Funktionen. Für den optionalen KI-Dienst ist bei Vercel nichts einzurichten: Jede Person hinterlegt ihren eigenen Schlüssel in der App.
 
 ## Lokal starten (ohne Internet, mit lokalem Konto)
 
@@ -69,11 +69,11 @@ Computer und Handy greifen auf dieselben Daten zu. Speichern beide Geräte kurz 
 
 ## KI-Dienst (optional)
 
-Lernplan, Import, Karteikarten sowie Merkblatt, Quiz und Probeprüfung funktionieren **ohne KI**: Die App erstellt sie lokal aus deinen Unterlagen. Optional verbessert ein KI-Dienst die Inhalte. Zur Wahl stehen **Claude** (Anthropic) und **ChatGPT** (OpenAI):
+Lernplan, Import, Karteikarten sowie Merkblatt, Quiz und Probeprüfung funktionieren **ohne KI**: Die App erstellt sie lokal aus deinen Unterlagen. Optional verbessert ein KI-Dienst die Inhalte. Zur Wahl stehen **Claude** (Anthropic) und **ChatGPT** (OpenAI). **Jede Person nutzt ihren eigenen Zugang** und bezahlt nur ihre eigene Nutzung; es gibt keinen gemeinsamen Schlüssel.
 
 1. Einen API-Schlüssel erstellen und Guthaben aufladen: für Claude auf console.anthropic.com, für ChatGPT auf platform.openai.com. Die Nutzung kostet pro Erstellung und ist weder im Claude- noch im ChatGPT-Abo enthalten.
-2. `.env.example` zu `.env` kopieren und `ANTHROPIC_API_KEY=` bzw. `OPENAI_API_KEY=` ausfüllen. `.env` ist in `.gitignore` eingetragen und kommt nicht ins Projektarchiv.
-3. `npm start` neu ausführen, unter **Einstellungen** Claude oder ChatGPT wählen und den Dienst bewusst aktivieren. Beim Wechsel des Dienstes muss er erneut aktiviert werden.
+2. In der App unter **Einstellungen** Claude oder ChatGPT wählen, den Schlüssel eintragen und den Dienst bewusst aktivieren.
+3. Der Schlüssel bleibt nur im eigenen Browser (pro Konto, wahlweise nur bis zum Schliessen des Browsers). Er wird weder in den Lerndaten, in der Datenbank noch auf dem Server gespeichert, sondern nur bei einer bestätigten Erstellung an den Anbieter weitergereicht. Auf einem weiteren Gerät wird er dort erneut eingetragen.
 
 Übertragen werden nur die ausgewählten Unterlagen, und erst nach einer Bestätigung pro Erstellung.
 
@@ -94,7 +94,8 @@ npm run e2e
 ## Aufbau
 
 - `server.js`: lokaler Server ohne Framework (Dateien, Speicherung, KI-Weiterleitung)
-- `server/ai.js`: optionale Anbindung an Claude oder ChatGPT; der Schlüssel bleibt auf dem Server
+- `server/ai.js`: optionale Anbindung an Claude oder ChatGPT mit dem persönlichen Schlüssel der jeweiligen Person
+- `public/js/aikeys.js`: persönlicher KI-Schlüssel im Browser
 - `server/local-auth.js`: lokale Konten und Anmeldung
 - `public/js/planner.js`: Lernplan-Berechnung
 - `public/js/gen.js`: lokaler Generator für Merkblatt, Karten, Quiz und Prüfung mit Quellenverweisen

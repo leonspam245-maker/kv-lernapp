@@ -1,5 +1,7 @@
 // Optionale KI-Generierung: Claude (Anthropic) oder ChatGPT (OpenAI).
-// Die Schlüssel werden nur serverseitig gelesen (.env bzw. Vercel-Umgebungsvariablen) und nie an den Browser geschickt.
+// Jede Person nutzt ihren eigenen API-Schlüssel. Er kommt mit der einzelnen Anfrage aus ihrem Browser,
+// wird nur für diese Anfrage an den Anbieter weitergereicht und nie gespeichert oder protokolliert.
+// Ein gemeinsamer Server-Schlüssel wird bewusst nicht verwendet.
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
@@ -7,8 +9,9 @@ const MODEL = () => process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const OPENAI_MODEL = () => process.env.OPENAI_MODEL || 'gpt-6.1-sol';
 
 export function aiStatus() {
-  const claude = { configured: Boolean(process.env.ANTHROPIC_API_KEY), model: MODEL(), provider: 'Anthropic (Claude API)' };
-  const chatgpt = { configured: Boolean(process.env.OPENAI_API_KEY), model: OPENAI_MODEL(), provider: 'OpenAI (ChatGPT API)' };
+  // configured: Der Server kann weiterreichen; ob ein Schlüssel vorhanden ist, weiss nur der Browser der Person
+  const claude = { configured: true, personalKey: true, model: MODEL(), provider: 'Anthropic (Claude API)' };
+  const chatgpt = { configured: true, personalKey: true, model: OPENAI_MODEL(), provider: 'OpenAI (ChatGPT API)' };
   // configured/model/provider bleiben für ältere App-Versionen erhalten (Claude)
   return { ...claude, providers: { claude, chatgpt } };
 }
@@ -88,9 +91,22 @@ function buildDocument(sources) {
 }
 const escapeAttr = (t) => String(t || '').replace(/"/g, "'");
 
-export async function generateWithAi({ provider = 'claude', ...request }) {
-  if (provider === 'chatgpt') return generateWithOpenAi(request);
-  return generateWithClaude(request);
+const KEY_PATTERN = { claude: /^sk-ant-[A-Za-z0-9_-]{20,400}$/, chatgpt: /^sk-[A-Za-z0-9_-]{20,400}$/ };
+/** Persönlichen Schlüssel aus der Anfrage prüfen (nur Format, keine Speicherung). */
+export function personalKey(provider, raw) {
+  const key = String(raw || '').trim();
+  if (!key) throw Object.assign(new Error('Kein eigener API-Schlüssel hinterlegt. Trage ihn unter «Einstellungen» ein.'), { status: 400 });
+  if (!KEY_PATTERN[provider]?.test(key) || (provider === 'chatgpt' && key.startsWith('sk-ant-'))) {
+    throw Object.assign(new Error(`Der hinterlegte Schlüssel passt nicht zu ${provider === 'chatgpt' ? 'ChatGPT' : 'Claude'}. Prüfe ihn unter «Einstellungen».`), { status: 400 });
+  }
+  return key;
+}
+
+export async function generateWithAi({ provider = 'claude', apiKey, ...request }) {
+  const p = provider === 'chatgpt' ? 'chatgpt' : 'claude';
+  const key = personalKey(p, apiKey);
+  if (p === 'chatgpt') return generateWithOpenAi(request, key);
+  return generateWithClaude(request, key);
 }
 
 function buildPrompt({ subjectName, topics, sources }) {
@@ -103,11 +119,10 @@ function validate({ type, sources }) {
   if (!Array.isArray(sources) || !sources.length) throw Object.assign(new Error('Keine Unterlagen ausgewählt.'), { status: 400 });
 }
 
-async function generateWithOpenAi(request) {
-  if (!process.env.OPENAI_API_KEY) throw Object.assign(new Error('Kein API-Schlüssel für ChatGPT eingerichtet (OPENAI_API_KEY).'), { status: 400 });
+async function generateWithOpenAi(request, apiKey) {
   validate(request);
   const { type } = request;
-  const client = new OpenAI();
+  const client = new OpenAI({ apiKey, maxRetries: 1 });
   let completion;
   try {
     completion = await client.chat.completions.create({
@@ -116,8 +131,8 @@ async function generateWithOpenAi(request) {
       response_format: { type: 'json_schema', json_schema: { name: `lernapp_${type}`, strict: true, schema: SCHEMAS[type] } },
     });
   } catch (e) {
-    if (e instanceof OpenAI.AuthenticationError) throw Object.assign(new Error('Der ChatGPT-Schlüssel wurde abgelehnt. Prüfe OPENAI_API_KEY.'), { status: 401 });
-    if (e instanceof OpenAI.RateLimitError) throw Object.assign(new Error('Zu viele Anfragen oder Guthaben bei OpenAI aufgebraucht. Bitte später erneut versuchen.'), { status: 429 });
+    if (e instanceof OpenAI.AuthenticationError) throw Object.assign(new Error('OpenAI hat deinen Schlüssel abgelehnt. Prüfe ihn unter «Einstellungen» (oder ob er bei OpenAI gelöscht wurde).'), { status: 401 });
+    if (e instanceof OpenAI.RateLimitError) throw Object.assign(new Error('Zu viele Anfragen oder dein Guthaben bei OpenAI ist aufgebraucht. Bitte später erneut versuchen oder Guthaben aufladen.'), { status: 429 });
     if (e instanceof OpenAI.APIConnectionError) throw Object.assign(new Error('Keine Verbindung zu ChatGPT. Internetverbindung prüfen.'), { status: 503 });
     if (e instanceof OpenAI.NotFoundError) throw Object.assign(new Error(`Das Modell «${OPENAI_MODEL()}» ist bei OpenAI nicht verfügbar. Setze OPENAI_MODEL auf ein verfügbares Modell.`), { status: 400 });
     if (e instanceof OpenAI.APIError) throw Object.assign(new Error(`ChatGPT meldet Fehler ${e.status}: ${e.message}`), { status: 502 });
@@ -133,12 +148,11 @@ async function generateWithOpenAi(request) {
   }
 }
 
-async function generateWithClaude({ type, subjectName, topics, sources }) {
-  if (!process.env.ANTHROPIC_API_KEY) throw Object.assign(new Error('Kein API-Schlüssel eingerichtet (ANTHROPIC_API_KEY in der Datei .env).'), { status: 400 });
+async function generateWithClaude({ type, subjectName, topics, sources }, apiKey) {
   if (!SCHEMAS[type]) throw Object.assign(new Error('Unbekannter Inhaltstyp.'), { status: 400 });
   if (!Array.isArray(sources) || !sources.length) throw Object.assign(new Error('Keine Unterlagen ausgewählt.'), { status: 400 });
 
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey, maxRetries: 1 });
   const topicList = (topics || []).map((t) => `- ${t.name} (ID: ${t.id})`).join('\n');
   const user = `Fach: ${subjectName}\nThemen:\n${topicList}\n\nAuftrag: ${TASKS[type]}\n\nUnterlagen:\n${buildDocument(sources)}`;
 
@@ -155,8 +169,8 @@ async function generateWithClaude({ type, subjectName, topics, sources }) {
     });
     message = await stream.finalMessage();
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw Object.assign(new Error('Der API-Schlüssel wurde abgelehnt. Prüfe ANTHROPIC_API_KEY in der Datei .env.'), { status: 401 });
-    if (e instanceof Anthropic.RateLimitError) throw Object.assign(new Error('Zu viele Anfragen oder Guthaben aufgebraucht. Bitte später erneut versuchen.'), { status: 429 });
+    if (e instanceof Anthropic.AuthenticationError) throw Object.assign(new Error('Anthropic hat deinen Schlüssel abgelehnt. Prüfe ihn unter «Einstellungen» (oder ob er bei Anthropic gelöscht wurde).'), { status: 401 });
+    if (e instanceof Anthropic.RateLimitError) throw Object.assign(new Error('Zu viele Anfragen oder dein Guthaben bei Anthropic ist aufgebraucht. Bitte später erneut versuchen oder Guthaben aufladen.'), { status: 429 });
     if (e instanceof Anthropic.APIConnectionError) throw Object.assign(new Error('Keine Verbindung zum KI-Dienst. Internetverbindung prüfen.'), { status: 503 });
     if (e instanceof Anthropic.APIError) throw Object.assign(new Error(`KI-Dienst meldet Fehler ${e.status}: ${e.message}`), { status: 502 });
     throw e;

@@ -5,6 +5,7 @@ import { toast, confirmDialog } from './ui.js';
 import { rerender } from './app.js';
 import { buildDemoData } from './demo.js';
 import { isCloud, signOut } from './backend.js';
+import { getAiKey, setAiKey, removeAiKey, isRemembered, maskKey } from './aikeys.js';
 
 export function settingsView(el) {
   const db = store.db;
@@ -12,17 +13,18 @@ export function settingsView(el) {
   const provider = db.settings.aiProvider === 'chatgpt' ? 'chatgpt' : 'claude';
   const consent = db.settings.aiConsent;
   const PROVIDERS = {
-    claude: { name: 'Claude', company: 'Anthropic', env: 'ANTHROPIC_API_KEY', model: ai.providers?.claude?.model || ai.model || 'claude-opus-5-5',
+    claude: { name: 'Claude', company: 'Anthropic', model: ai.providers?.claude?.model || ai.model || 'claude-opus-5-5',
       price: 'USD 4 pro Million Eingabe-Tokens, USD 20 pro Million Ausgabe-Tokens, Stand 03.11.2026', estimate: 'USD 0.10–0.30',
       subscription: 'ein Claude-Abo (Pro/Max)', privacy: 'https://www.anthropic.com/legal/privacy', pricing: 'https://www.anthropic.com/pricing', pricingLabel: 'anthropic.com/pricing',
       console: 'https://console.anthropic.com', consoleLabel: 'console.anthropic.com' },
-    chatgpt: { name: 'ChatGPT', company: 'OpenAI', env: 'OPENAI_API_KEY', model: ai.providers?.chatgpt?.model || 'gpt-6.1-sol',
+    chatgpt: { name: 'ChatGPT', company: 'OpenAI', model: ai.providers?.chatgpt?.model || 'gpt-6.1-sol',
       price: 'gemäss Preisübersichten USD 2 pro Million Eingabe-Tokens, USD 10 pro Million Ausgabe-Tokens, Stand 23.11.2026, nicht direkt bei OpenAI geprüft', estimate: 'USD 0.05–0.15',
       subscription: 'ein ChatGPT-Abo (Plus/Pro)', privacy: 'https://openai.com/policies/privacy-policy', pricing: 'https://openai.com/api/pricing', pricingLabel: 'openai.com/api/pricing',
       console: 'https://platform.openai.com', consoleLabel: 'platform.openai.com' },
   };
   const P = PROVIDERS[provider];
-  const configured = Boolean(ai.providers?.[provider]?.configured ?? (provider === 'claude' && ai.configured));
+  const myKey = getAiKey(provider);
+  const configured = Boolean(myKey);
   const demoCount = db.subjects.filter((s) => s.demo).length;
   const pr = db.settings.profile || {};
   el.innerHTML = `<div class="page-head"><div><h1>Einstellungen</h1></div></div>
@@ -50,14 +52,21 @@ export function settingsView(el) {
     </ul>
     <h3>Entstehen Kosten?</h3>
     <p>Ja, sobald du den Dienst nutzt. Die API von ${P.company} wird pro Nutzung abgerechnet und braucht ein eigenes Konto mit Guthaben; ${P.subscription} deckt die API nicht ab. Mit dem eingestellten Modell <code>${esc(P.model)}</code> (Listenpreis ${P.price}) kostet ein Merkblatt aus rund 10 Seiten ungefähr ${P.estimate}. Den genauen Preis zeigt <a href="${P.pricing}" target="_blank" rel="noopener">${P.pricingLabel}</a>; Beträge in CHF sind ungefähr.</p>
-    <h3>Einrichtung</h3>
+    <h3>Dein eigener Schlüssel</h3>
+    <p>Jede Person nutzt ihren eigenen KI-Zugang und bezahlt nur ihre eigene Nutzung. Es gibt keinen gemeinsamen Schlüssel.</p>
     <ol>
       <li>Auf <a href="${P.console}" target="_blank" rel="noopener">${P.consoleLabel}</a> ein Konto erstellen, Guthaben aufladen und einen API-Schlüssel anlegen.</li>
-      ${isCloud()
-        ? `<li>Bei Vercel im Projekt «kv-lernapp» unter «Settings» → «Environment Variables» die Variable <code>${P.env}</code> mit deinem Schlüssel anlegen (Typ «Sensitive»). Der Schlüssel bleibt auf dem Server und ist im App-Code nicht sichtbar.</li><li>Unter «Deployments» die neueste Version erneut bereitstellen («Redeploy») und den Dienst hier aktivieren.</li>`
-        : `<li>Im Projektordner die Datei <code>.env.example</code> zu <code>.env</code> kopieren und den Schlüssel bei <code>${P.env}=</code> eintragen. Die Datei <code>.env</code> bleibt auf deinem Computer und wird nicht ins Projektarchiv übernommen.</li><li>Die App neu starten und den Dienst hier aktivieren.</li>`}
+      <li>Den Schlüssel hier eintragen. Er bleibt <strong>nur in diesem Browser</strong> (für dein Konto) und wird weder in deinen Lerndaten noch auf dem Server gespeichert. Er wird nur bei einer bestätigten KI-Erstellung über ${isCloud() ? 'den Lernapp-Server' : 'deinen Lernapp-Server'} an ${P.company} weitergereicht.</li>
+      <li>Auf einem anderen Gerät trägst du den Schlüssel dort erneut ein. An einem fremden oder gemeinsam genutzten Computer «Auf diesem Gerät merken» ausschalten.</li>
     </ol>
-    <div class="notice ${configured ? 'notice-ok' : 'notice-warn'}">Status: ${configured ? `API-Schlüssel für ${P.name} auf dem Server vorhanden.` : `Kein API-Schlüssel für ${P.name} eingerichtet – KI-Funktionen sind nicht verfügbar.`} ${consent ? `KI-Dienst (${P.name}) aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
+    ${configured
+      ? `<div class="row" style="align-items:center"><span>Hinterlegt: <code>${esc(maskKey(myKey))}</code> · ${isRemembered(provider) ? 'auf diesem Gerät gemerkt' : 'nur bis der Browser geschlossen wird'}</span><button type="button" class="btn btn-small btn-danger" id="key-del">Schlüssel entfernen</button></div>`
+      : `<form id="key-form" class="row" style="align-items:end" novalidate autocomplete="off">
+          <div class="field" style="flex:1;min-width:220px;margin:0"><label for="key-input">API-Schlüssel für ${P.name}</label><input type="password" id="key-input" autocomplete="off" spellcheck="false" placeholder="${provider === 'claude' ? 'sk-ant-…' : 'sk-…'}"></div>
+          <button class="btn btn-primary" id="key-save">Schlüssel speichern</button>
+          <label class="check" style="flex-basis:100%;padding-top:0"><input type="checkbox" id="key-remember" checked> Auf diesem Gerät merken</label>
+        </form>`}
+    <div class="notice ${configured ? 'notice-ok' : 'notice-warn'}">Status: ${configured ? `Dein Schlüssel für ${P.name} ist hinterlegt.` : `Kein eigener Schlüssel für ${P.name} hinterlegt – KI-Funktionen sind nicht verfügbar.`} ${consent ? `KI-Dienst (${P.name}) aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
     ${consent
       ? '<button class="btn btn-danger" id="ai-off">KI-Dienst deaktivieren</button>'
       : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte an ${P.name} übertragen werden und dass Kosten entstehen.</label>
@@ -115,6 +124,19 @@ export function settingsView(el) {
       toast(`${PROVIDERS[next].name} gewählt. Aktiviere den Dienst, um ihn zu nutzen.`, 'info'); rerender();
     } catch (e) { toast(e.message, 'error'); }
   }));
+  el.querySelector('#key-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = el.querySelector('#key-input');
+    try {
+      setAiKey(provider, input.value, el.querySelector('#key-remember').checked);
+      input.value = '';
+      toast(`Schlüssel für ${P.name} gespeichert (nur in diesem Browser).`); rerender();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+  el.querySelector('#key-del')?.addEventListener('click', async () => {
+    if (!(await confirmDialog(`Schlüssel für ${P.name} aus diesem Browser entfernen? Bei ${P.company} bleibt er gültig; dort kannst du ihn bei Bedarf löschen.`, { ok: 'Entfernen', danger: true }))) return;
+    removeAiKey(provider); toast('Schlüssel entfernt.'); rerender();
+  });
   el.querySelector('#ai-on')?.addEventListener('click', async () => {
     if (!el.querySelector('#ai-ack').checked) return toast('Bitte zuerst bestätigen, dass du die Hinweise gelesen hast.', 'error');
     try { await commit((d) => { d.settings.aiConsent = true; d.settings.aiConsentAt = new Date().toISOString(); }); toast('KI-Dienst aktiviert. Unterlagen werden nur nach deiner Bestätigung übertragen.'); rerender(); } catch (e) { toast(e.message, 'error'); }
