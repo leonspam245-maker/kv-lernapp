@@ -28,7 +28,11 @@ async function startServer() {
   throw new Error('Server startet nicht');
 }
 const stopServer = () => new Promise((r) => { server.once('exit', r); server.kill(); });
-const state = async () => (await (await fetch(BASE + '/api/state')).json()).data;
+// Daten des im Test-Browser angemeldeten Kontos (Cookie aus dem Browser übernehmen)
+let ctx;
+const cookieOf = async (c) => (await c.cookies()).map((x) => `${x.name}=${x.value}`).join('; ');
+const state = async (c = ctx) => (await (await fetch(BASE + '/api/state', { headers: { cookie: await cookieOf(c) } })).json()).data;
+const EMAIL = 'leon.test@example.ch'; const PW = 'Lernen2026';
 
 const results = [];
 async function check(name, fn) {
@@ -38,7 +42,7 @@ async function check(name, fn) {
 
 await startServer();
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -58,6 +62,33 @@ async function chooseTarget(subject, topic) {
 }
 
 try {
+  // ---------- 0. Anmeldung ----------
+  await check('Lokale Anmeldung: ohne Konto keine Daten, Registrierung mit Profil, falsches Passwort abgelehnt', async () => {
+    assert.equal((await fetch(BASE + '/api/state')).status, 401, 'API ohne Anmeldung gesperrt');
+    assert.equal((await fetch(BASE + '/api/auth/me')).status, 401);
+    await page.goto(BASE + '/#/faecher');
+    await page.waitForSelector('#auth-form');
+    assert.equal(await page.locator('#auth-title').count(), 1, 'Anmeldemaske statt App');
+    await page.click('#auth-switch');
+    await page.fill('#auth-name', 'Léon'); await page.selectOption('#auth-year', '2');
+    await page.fill('#auth-email', EMAIL); await page.fill('#auth-pw', PW); await page.fill('#auth-pw2', PW);
+    assert.match(await page.innerText('#auth-form'), /nur auf diesem Computer/);
+    await page.click('#auth-submit');
+    assert.match(await page.innerText('#auth-form'), /einverstanden/i, 'Einwilligung verlangt');
+    await page.check('#auth-consent'); await page.click('#auth-submit');
+    await page.waitForSelector('main h1:not(#auth-title)');
+    await go('#/');
+    assert.match(await page.innerText('main'), /Hallo Léon/);
+    const raw = fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8');
+    assert.ok(!raw.includes(PW), 'Passwort nicht im Klartext gespeichert');
+    // Falsches Passwort und doppelte Adresse
+    const bad = await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: EMAIL, password: 'falsch1234' }) });
+    assert.equal(bad.status, 401);
+    const dup = await fetch(BASE + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: EMAIL, password: 'Anderes123' }) });
+    assert.equal(dup.status, 409);
+    await page.screenshot({ path: path.join(SHOTS, '00-lokal-angemeldet.png'), fullPage: true });
+  });
+
   // ---------- 1. PDF-Import mit gescannter Seite und Texterkennung ----------
   await check('PDF: mehrere Seiten, Scan erkannt, Texterkennung, Speichern', async () => {
     await go('#/import?art=pdf');
@@ -304,7 +335,7 @@ try {
   await check('Wiederöffnen nach Server-Neustart: Material und Lernfortschritt vorhanden', async () => {
     const before = await state();
     await stopServer(); await startServer();
-    const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, storageState: await ctx.storageState() });
     const p2 = await ctx2.newPage();
     await p2.goto(BASE + '/#/'); await p2.waitForSelector('main h1');
     const text = await p2.innerText('main');
@@ -324,7 +355,7 @@ try {
 
   // ---------- 11. Handy ----------
   await check('Handy (iPhone 13): Navigation unten, kein seitliches Scrollen, Karten per Tippen', async () => {
-    const m = await browser.newContext({ ...devices['iPhone 13'] });
+    const m = await browser.newContext({ ...devices['iPhone 13'], storageState: await ctx.storageState() });
     const mp = await m.newPage();
     mp.on('pageerror', (e) => errors.push('mobil: ' + e.message));
     for (const [hash, name] of [['#/', 'start'], ['#/import?art=quizlet', 'import'], ['#/ueben', 'ueben'], ['#/plan', 'plan'], ['#/faecher', 'faecher']]) {
@@ -380,7 +411,7 @@ try {
 
   // ---------- 13. Zwei Geräte ----------
   await check('Zwei Geräte: Änderungen werden zusammengeführt statt überschrieben', async () => {
-    const other = await browser.newContext({ ...devices['iPhone 13'] });
+    const other = await browser.newContext({ ...devices['iPhone 13'], storageState: await ctx.storageState() });
     const phone = await other.newPage();
     await go('#/faecher');
     await phone.goto(BASE + '/#/faecher'); await phone.waitForSelector('#new-subject');
@@ -395,6 +426,30 @@ try {
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await page.waitForSelector('.list-link:has-text("Englisch")');
     await other.close();
+  });
+
+  // ---------- 14. Zweites Konto und Abmelden ----------
+  await check('Zweites Konto sieht keine fremden Daten; Abmelden sperrt die App wieder', async () => {
+    const c3 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p3 = await c3.newPage();
+    p3.on('pageerror', (e) => errors.push('konto2: ' + e.message));
+    await p3.goto(BASE + '/#/'); await p3.waitForSelector('#auth-form');
+    await p3.click('#auth-switch');
+    await p3.fill('#auth-name', 'Mia'); await p3.fill('#auth-email', 'mia@example.ch');
+    await p3.fill('#auth-pw', 'Zweites123'); await p3.fill('#auth-pw2', 'Zweites123'); await p3.check('#auth-consent');
+    await p3.click('#auth-submit'); await p3.waitForSelector('main h1:not(#auth-title)');
+    const own = await state(c3);
+    assert.equal(own.subjects.length, 0, 'neues Konto startet leer');
+    assert.equal((await state()).subjects.length, 3, 'erstes Konto unverändert');
+    await p3.goto(BASE + '/#/einstellungen'); await p3.waitForSelector('#logout2');
+    assert.match(await p3.innerText('main'), /mia@example\.ch/);
+    await p3.click('#logout2');
+    await p3.waitForSelector('#auth-form');
+    assert.equal((await fetch(BASE + '/api/state', { headers: { cookie: await cookieOf(c3) } })).status, 401, 'Sitzung beendet');
+    // wieder anmelden
+    await p3.fill('#auth-email', 'mia@example.ch'); await p3.fill('#auth-pw', 'Zweites123'); await p3.click('#auth-submit');
+    await p3.waitForSelector('main h1:not(#auth-title)');
+    await c3.close();
   });
 
   await check('Keine JavaScript-Fehler im Browser', async () => { assert.deepEqual(errors, []); });

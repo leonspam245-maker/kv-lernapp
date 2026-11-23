@@ -22,8 +22,23 @@ export async function initBackend() {
 }
 
 // ---------- Anmeldung (nur online) ----------
+async function localAuth(path, body) {
+  let res;
+  try { res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); }
+  catch { throw new Error('Keine Verbindung zum Lernapp-Server. Läuft «npm start» noch?'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Fehler ${res.status}`);
+  return data;
+}
+
 export async function currentUser() {
-  if (!isCloud()) return { local: true };
+  if (!isCloud()) {
+    // Lokale Version: Konto über Cookie beim eigenen Server prüfen
+    const res = await fetch('/api/auth/me');
+    if (res.status === 401) return null;
+    if (!res.ok) throw new Error('Der Lernapp-Server antwortet nicht richtig.');
+    return (await res.json()).user;
+  }
   const { data } = await sb.auth.getSession();
   const session = data.session;
   if (!session) return null;
@@ -46,10 +61,12 @@ const authError = (error) => {
   return m || 'Unbekannter Fehler bei der Anmeldung.';
 };
 export async function signIn(email, password) {
+  if (!isCloud()) { await localAuth('/api/auth/login', { email, password }); return; }
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw new Error(authError(error));
 }
 export async function signUp(email, password, profile = {}) {
+  if (!isCloud()) { await localAuth('/api/auth/register', { email, password, profile }); return; }
   const { error } = await sb.auth.signUp({ email, password, options: { data: profile } });
   // Das Konto wird serverseitig direkt bestätigt; danach gleich anmelden.
   // Auch bei einem Fehler (z. B. E-Mail-Versandgrenze) kann das Konto bereits bestehen: Anmeldung versuchen.
@@ -63,6 +80,7 @@ export async function signUp(email, password, profile = {}) {
 }
 export async function signOut() {
   if (isCloud()) await sb.auth.signOut();
+  else await localAuth('/api/auth/logout');
 }
 export async function accessToken() {
   if (!isCloud()) return null;
@@ -75,6 +93,7 @@ export async function accessToken() {
 export async function getState() {
   if (!isCloud()) {
     const res = await fetch('/api/state');
+    if (res.status === 401) throw new Error('Deine Anmeldung ist abgelaufen. Bitte neu laden und anmelden.');
     if (!res.ok) throw new Error('Die gespeicherten Daten konnten nicht geladen werden.');
     return res.json();
   }
@@ -89,6 +108,7 @@ export async function putState(baseVersion, data) {
     const res = await fetch('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseVersion, data }) });
     const body = await res.json().catch(() => ({}));
     if (res.status === 409) return { conflict: true };
+    if (res.status === 401) throw new Error('Deine Anmeldung ist abgelaufen. Bitte neu laden und anmelden.');
     if (!res.ok) throw new Error(body.error || `Server antwortet mit Fehler ${res.status}`);
     return { version: body.version };
   }

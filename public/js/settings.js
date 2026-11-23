@@ -9,7 +9,20 @@ import { isCloud, signOut } from './backend.js';
 export function settingsView(el) {
   const db = store.db;
   const ai = store.server.ai || {};
+  const provider = db.settings.aiProvider === 'chatgpt' ? 'chatgpt' : 'claude';
   const consent = db.settings.aiConsent;
+  const PROVIDERS = {
+    claude: { name: 'Claude', company: 'Anthropic', env: 'ANTHROPIC_API_KEY', model: ai.providers?.claude?.model || ai.model || 'claude-opus-5-5',
+      price: 'USD 4 pro Million Eingabe-Tokens, USD 20 pro Million Ausgabe-Tokens, Stand 03.11.2026', estimate: 'USD 0.10–0.30',
+      subscription: 'ein Claude-Abo (Pro/Max)', privacy: 'https://www.anthropic.com/legal/privacy', pricing: 'https://www.anthropic.com/pricing', pricingLabel: 'anthropic.com/pricing',
+      console: 'https://console.anthropic.com', consoleLabel: 'console.anthropic.com' },
+    chatgpt: { name: 'ChatGPT', company: 'OpenAI', env: 'OPENAI_API_KEY', model: ai.providers?.chatgpt?.model || 'gpt-6.1-sol',
+      price: 'gemäss Preisübersichten USD 2 pro Million Eingabe-Tokens, USD 10 pro Million Ausgabe-Tokens, Stand 23.11.2026, nicht direkt bei OpenAI geprüft', estimate: 'USD 0.05–0.15',
+      subscription: 'ein ChatGPT-Abo (Plus/Pro)', privacy: 'https://openai.com/policies/privacy-policy', pricing: 'https://openai.com/api/pricing', pricingLabel: 'openai.com/api/pricing',
+      console: 'https://platform.openai.com', consoleLabel: 'platform.openai.com' },
+  };
+  const P = PROVIDERS[provider];
+  const configured = Boolean(ai.providers?.[provider]?.configured ?? (provider === 'claude' && ai.configured));
   const demoCount = db.subjects.filter((s) => s.demo).length;
   const pr = db.settings.profile || {};
   el.innerHTML = `<div class="page-head"><div><h1>Einstellungen</h1></div></div>
@@ -21,38 +34,41 @@ export function settingsView(el) {
       <div class="field"><label for="pf-school">Berufsfachschule</label><input type="text" id="pf-school" value="${esc(pr.school ?? '')}" autocomplete="organization"></div>
       <div><button class="btn btn-primary" id="pf-save">Profil speichern</button></div>
     </form>
+    <p class="small muted" style="margin:6px 0 0">Angemeldet als ${esc(store.user?.email || '')} · <button type="button" class="btn-link" id="logout2">Abmelden</button></p>
   </section>
   <section class="card">
     <h2 style="margin-top:0">KI-Dienst für Lerninhalte (optional)</h2>
-    <p>Die App funktioniert vollständig ohne KI: Import, Lernplan, Karteikarten, sowie Merkblatt, Quiz und Probeprüfung aus deinen Unterlagen werden lokal erstellt. Optional kann der KI-Dienst <strong>Claude von Anthropic</strong> verständlichere Merkblätter, abwechslungsreichere Fragen und gekennzeichnete eigene Beispiele erstellen.</p>
+    <p>Die App funktioniert vollständig ohne KI: Import, Lernplan, Karteikarten sowie Merkblatt, Quiz und Probeprüfung aus deinen Unterlagen werden lokal erstellt. Optional formuliert ein KI-Dienst verständlichere Merkblätter, abwechslungsreichere Fragen und gekennzeichnete eigene Beispiele.</p>
+    <div class="field"><span class="eyebrow">Anbieter</span>
+      <div class="tabs" role="radiogroup" aria-label="KI-Anbieter">${Object.entries(PROVIDERS).map(([k, p]) => `<button type="button" role="radio" data-provider="${k}" aria-selected="${provider === k}" aria-checked="${provider === k}">${p.name}</button>`).join('')}</div></div>
     <h3>Was wird übertragen?</h3>
     <ul>
       <li>Nur beim Klick auf «Erstellen» mit der Option «Mit KI» und nach einer Bestätigung.</li>
       <li>Nur der Text der ausgewählten Unterlagen, deren Titel sowie Fach- und Themennamen.</li>
       <li>Nicht übertragen werden: Lernfortschritt, Quizergebnisse, Lernplan, andere Unterlagen, dein Name.</li>
-      <li>Die Daten gehen an die Claude API von Anthropic (USA). Details: <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">Datenschutz von Anthropic</a>.</li>
+      <li>Die Daten gehen an ${P.name} von ${P.company} (USA). Details: <a href="${P.privacy}" target="_blank" rel="noopener">Datenschutz von ${P.company}</a>.</li>
     </ul>
     <h3>Entstehen Kosten?</h3>
-    <p>Ja, sobald du den Dienst nutzt. Die Claude API wird pro Nutzung abgerechnet und braucht ein eigenes Konto mit Guthaben bei Anthropic; ein Claude-Abo (Pro/Max) deckt die API nicht ab. Mit dem eingestellten Modell <code>${esc(ai.model || 'claude-opus-5-5')}</code> (Listenpreis USD 4 pro Million Eingabe-Tokens, USD 20 pro Million Ausgabe-Tokens, Stand 03.11.2026) kostet ein Merkblatt aus rund 10 Seiten ungefähr USD 0.10–0.30. Den genauen Preis zeigt <a href="https://www.anthropic.com/pricing" target="_blank" rel="noopener">anthropic.com/pricing</a>; Beträge in CHF sind ungefähr.</p>
+    <p>Ja, sobald du den Dienst nutzt. Die API von ${P.company} wird pro Nutzung abgerechnet und braucht ein eigenes Konto mit Guthaben; ${P.subscription} deckt die API nicht ab. Mit dem eingestellten Modell <code>${esc(P.model)}</code> (Listenpreis ${P.price}) kostet ein Merkblatt aus rund 10 Seiten ungefähr ${P.estimate}. Den genauen Preis zeigt <a href="${P.pricing}" target="_blank" rel="noopener">${P.pricingLabel}</a>; Beträge in CHF sind ungefähr.</p>
     <h3>Einrichtung</h3>
     <ol>
-      <li>Auf <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> ein Konto erstellen, Guthaben aufladen und einen API-Schlüssel anlegen.</li>
+      <li>Auf <a href="${P.console}" target="_blank" rel="noopener">${P.consoleLabel}</a> ein Konto erstellen, Guthaben aufladen und einen API-Schlüssel anlegen.</li>
       ${isCloud()
-        ? '<li>Bei Vercel im Projekt «kv-lernapp» unter «Settings» → «Environment Variables» die Variable <code>ANTHROPIC_API_KEY</code> mit deinem Schlüssel anlegen (Typ «Sensitive»). Der Schlüssel bleibt auf dem Server und ist im App-Code nicht sichtbar.</li><li>Unter «Deployments» die neueste Version erneut bereitstellen («Redeploy») und den Dienst hier aktivieren.</li>'
-        : '<li>Im Projektordner die Datei <code>.env.example</code> zu <code>.env</code> kopieren und den Schlüssel bei <code>ANTHROPIC_API_KEY=</code> eintragen. Die Datei <code>.env</code> bleibt auf deinem Computer und wird nicht ins Projektarchiv übernommen.</li><li>Die App neu starten (<code>npm start</code>) und den Dienst hier aktivieren.</li>'}
+        ? `<li>Bei Vercel im Projekt «kv-lernapp» unter «Settings» → «Environment Variables» die Variable <code>${P.env}</code> mit deinem Schlüssel anlegen (Typ «Sensitive»). Der Schlüssel bleibt auf dem Server und ist im App-Code nicht sichtbar.</li><li>Unter «Deployments» die neueste Version erneut bereitstellen («Redeploy») und den Dienst hier aktivieren.</li>`
+        : `<li>Im Projektordner die Datei <code>.env.example</code> zu <code>.env</code> kopieren und den Schlüssel bei <code>${P.env}=</code> eintragen. Die Datei <code>.env</code> bleibt auf deinem Computer und wird nicht ins Projektarchiv übernommen.</li><li>Die App neu starten und den Dienst hier aktivieren.</li>`}
     </ol>
-    <div class="notice ${ai.configured ? 'notice-ok' : 'notice-warn'}">Status: ${ai.configured ? 'API-Schlüssel auf dem Server vorhanden.' : 'Kein API-Schlüssel eingerichtet – KI-Funktionen sind nicht verfügbar.'} ${consent ? `KI-Dienst aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
+    <div class="notice ${configured ? 'notice-ok' : 'notice-warn'}">Status: ${configured ? `API-Schlüssel für ${P.name} auf dem Server vorhanden.` : `Kein API-Schlüssel für ${P.name} eingerichtet – KI-Funktionen sind nicht verfügbar.`} ${consent ? `KI-Dienst (${P.name}) aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
     ${consent
       ? '<button class="btn btn-danger" id="ai-off">KI-Dienst deaktivieren</button>'
-      : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte übertragen werden und dass Kosten entstehen.</label>
-         <button class="btn btn-primary" id="ai-on" ${ai.configured ? '' : 'disabled'}>KI-Dienst aktivieren</button>`}
+      : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte an ${P.name} übertragen werden und dass Kosten entstehen.</label>
+         <button class="btn btn-primary" id="ai-on" ${configured ? '' : 'disabled'}>KI-Dienst aktivieren</button>`}
   </section>
 
   <section class="card">
     <h2 style="margin-top:0">Daten und Sicherung</h2>
     ${isCloud()
       ? '<p>Alle Unterlagen und dein Lernfortschritt sind online in deinem Konto gespeichert (Supabase, Rechenzentrum Zürich). Nur du hast nach der Anmeldung Zugriff. Du kannst die App auf jedem Gerät öffnen.</p>'
-      : '<p>Alle Unterlagen und dein Lernfortschritt werden auf dem Computer gespeichert, auf dem die App läuft (Datei <code>data/lernapp.json</code>, mit automatischer Sicherungskopie). Sie bleiben nach einem Neustart erhalten.</p>'}
+      : '<p>Alle Unterlagen und dein Lernfortschritt werden in deinem lokalen Konto auf dem Computer gespeichert, auf dem die App läuft (Ordner <code>data/</code>, mit automatischer Sicherungskopie). Jedes Konto hat eine eigene Datei. Die Daten bleiben nach einem Neustart erhalten.</p>'}
     <p class="small muted">Daten aus der lokalen Version übernimmst du so: dort «Sicherung herunterladen», hier «Sicherung einspielen».</p>
     <p class="small muted">${plural(db.subjects.length, 'Fach', 'Fächer')} · ${plural(db.topics.length, 'Thema', 'Themen')} · ${plural(db.sources.length, 'Unterlage', 'Unterlagen')} · ${plural(db.cards.length, 'Karte', 'Karten')} · ${plural(db.attempts.length, 'Übungsdurchgang', 'Übungsdurchgänge')}</p>
     <div class="row"><button class="btn" id="export">Sicherung herunterladen</button>
@@ -84,9 +100,21 @@ export function settingsView(el) {
       toast('Profil gespeichert.');
     } catch (err) { toast(err.message, 'error'); }
   });
+  el.querySelector('#logout2')?.addEventListener('click', async () => {
+    try { await signOut(); location.reload(); } catch (e) { toast(e.message, 'error'); }
+  });
   el.querySelector('#logout')?.addEventListener('click', async () => {
     try { await signOut(); location.reload(); } catch (e) { toast(e.message, 'error'); }
   });
+  el.querySelectorAll('[data-provider]').forEach((b) => b.addEventListener('click', async () => {
+    const next = b.dataset.provider;
+    if (next === provider) return;
+    try {
+      // Anbieterwechsel: Zustimmung gilt nur für den bisherigen Anbieter und wird zurückgesetzt
+      await commit((d) => { d.settings.aiProvider = next; d.settings.aiConsent = false; d.settings.aiConsentAt = null; });
+      toast(`${PROVIDERS[next].name} gewählt. Aktiviere den Dienst, um ihn zu nutzen.`, 'info'); rerender();
+    } catch (e) { toast(e.message, 'error'); }
+  }));
   el.querySelector('#ai-on')?.addEventListener('click', async () => {
     if (!el.querySelector('#ai-ack').checked) return toast('Bitte zuerst bestätigen, dass du die Hinweise gelesen hast.', 'error');
     try { await commit((d) => { d.settings.aiConsent = true; d.settings.aiConsentAt = new Date().toISOString(); }); toast('KI-Dienst aktiviert. Unterlagen werden nur nach deiner Bestätigung übertragen.'); rerender(); } catch (e) { toast(e.message, 'error'); }

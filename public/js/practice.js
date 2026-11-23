@@ -8,7 +8,11 @@ import { rerender } from './app.js';
 import { accessToken } from './backend.js';
 
 const TYPE = { merkblatt: 'Merkblatt', quiz: 'Quiz', exam: 'Probeprüfung' };
-const aiReady = () => store.server.ai?.configured && store.db.settings.aiConsent;
+/** Gewählter KI-Anbieter: Claude (Anthropic) oder ChatGPT (OpenAI) */
+export const AI_PROVIDERS = { claude: { name: 'Claude', company: 'Anthropic' }, chatgpt: { name: 'ChatGPT', company: 'OpenAI' } };
+const aiProvider = () => (store.db.settings.aiProvider === 'chatgpt' ? 'chatgpt' : 'claude');
+const aiConfigured = (p = aiProvider()) => Boolean(store.server.ai?.providers?.[p]?.configured ?? (p === 'claude' && store.server.ai?.configured));
+const aiReady = () => aiConfigured() && store.db.settings.aiConsent;
 
 // ---------- Auswahl & Erstellung ----------
 export function practiceView(el, _id, query) {
@@ -34,7 +38,7 @@ export function practiceView(el, _id, query) {
     <section class="card">
       <div class="eyebrow">Erstellen mit</div>
       <label class="check"><input type="radio" name="engine" value="lokal" checked> <span><strong>Lokal aus den Unterlagen</strong><br><span class="small muted">Funktioniert ohne Internet. Übernimmt Begriffe, Erklärungen, Tabellen und Beispiele direkt aus den Quellen.</span></span></label>
-      <label class="check"><input type="radio" name="engine" value="ki" ${aiReady() ? '' : 'disabled'}> <span><strong>Mit KI (Claude)</strong><br><span class="small muted">${aiReady() ? 'Formuliert verständlicher und ergänzt gekennzeichnete eigene Beispiele. Die gewählten Unterlagen werden an Anthropic übertragen.' : 'Nicht aktiviert. Einrichtung und Hinweise unter <a href="#/einstellungen">Einstellungen</a>.'}</span></span></label>
+      <label class="check"><input type="radio" name="engine" value="ki" ${aiReady() ? '' : 'disabled'}> <span><strong>Mit KI (${AI_PROVIDERS[aiProvider()].name})</strong><br><span class="small muted">${aiReady() ? 'Formuliert verständlicher und ergänzt gekennzeichnete eigene Beispiele. Die gewählten Unterlagen werden an Anthropic übertragen.' : 'Nicht aktiviert. Einrichtung und Hinweise unter <a href="#/einstellungen">Einstellungen</a>.'}</span></span></label>
       <div class="grid grid-2" style="margin-top:14px">
         <button class="btn btn-primary" data-make="merkblatt">Merkblatt erstellen</button>
         <button class="btn btn-primary" data-make="cards">Karteikarten erstellen</button>
@@ -82,7 +86,7 @@ const attemptsOf = (contentId) => store.db.attempts.filter((a) => a.contentId ==
 async function callAi(type, sources, subjectId) {
   const topicIds = [...new Set(sources.map((s) => s.topicId))];
   const chars = sources.reduce((n, s) => n + (s.pages?.reduce((m, p) => m + (p.text?.length || 0), 0) || 0) + (s.content?.length || 0) + (s.cards?.reduce((m, c) => m + c.term.length + c.def.length, 0) || 0), 0);
-  const ok = await confirmDialog(`${plural(sources.length, 'Unterlage', 'Unterlagen')} (ca. ${chars.toLocaleString('de-CH')} Zeichen) werden an den KI-Dienst von Anthropic übertragen, um ${TYPE[type] || 'Karteikarten'} zu erstellen. Lernfortschritt und andere Unterlagen werden nicht übertragen. Fortfahren?`, { ok: 'Übertragen und erstellen' });
+  const ok = await confirmDialog(`${plural(sources.length, 'Unterlage', 'Unterlagen')} (ca. ${chars.toLocaleString('de-CH')} Zeichen) werden an ${AI_PROVIDERS[aiProvider()].name} (${AI_PROVIDERS[aiProvider()].company}) übertragen, um ${TYPE[type] || 'Karteikarten'} zu erstellen. Lernfortschritt und andere Unterlagen werden nicht übertragen. Fortfahren?`, { ok: 'Übertragen und erstellen' });
   if (!ok) throw new Error('Abgebrochen – es wurde nichts übertragen.');
   const payload = {
     type,

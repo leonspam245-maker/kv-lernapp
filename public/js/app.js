@@ -455,6 +455,7 @@ function sourceView(el, id, query) {
       await loadAll();
       // Angaben aus der Registrierung einmalig ins Profil übernehmen
       const u = await currentUser();
+      store.user = u;
       const meta = u?.user_metadata;
       if (meta?.firstName && !store.db.settings.profile) {
         await commit((d) => { d.settings.profile = { firstName: meta.firstName, apprenticeshipYear: meta.apprenticeshipYear || 1, school: meta.school || '' }; }).catch(() => {});

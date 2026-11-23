@@ -1,11 +1,16 @@
-// Optionale KI-Generierung über die Claude API (Anthropic).
-// Der Schlüssel wird nur serverseitig aus .env gelesen und nie an den Browser geschickt.
+// Optionale KI-Generierung: Claude (Anthropic) oder ChatGPT (OpenAI).
+// Die Schlüssel werden nur serverseitig gelesen (.env bzw. Vercel-Umgebungsvariablen) und nie an den Browser geschickt.
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 const MODEL = () => process.env.CLAUDE_MODEL || 'claude-opus-5-5';
+const OPENAI_MODEL = () => process.env.OPENAI_MODEL || 'gpt-6.1-sol';
 
 export function aiStatus() {
-  return { configured: Boolean(process.env.ANTHROPIC_API_KEY), model: MODEL(), provider: 'Anthropic (Claude API)' };
+  const claude = { configured: Boolean(process.env.ANTHROPIC_API_KEY), model: MODEL(), provider: 'Anthropic (Claude API)' };
+  const chatgpt = { configured: Boolean(process.env.OPENAI_API_KEY), model: OPENAI_MODEL(), provider: 'OpenAI (ChatGPT API)' };
+  // configured/model/provider bleiben für ältere App-Versionen erhalten (Claude)
+  return { ...claude, providers: { claude, chatgpt } };
 }
 
 const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
@@ -83,7 +88,52 @@ function buildDocument(sources) {
 }
 const escapeAttr = (t) => String(t || '').replace(/"/g, "'");
 
-export async function generateWithAi({ type, subjectName, topics, sources }) {
+export async function generateWithAi({ provider = 'claude', ...request }) {
+  if (provider === 'chatgpt') return generateWithOpenAi(request);
+  return generateWithClaude(request);
+}
+
+function buildPrompt({ subjectName, topics, sources }) {
+  const topicList = (topics || []).map((t) => `- ${t.name} (ID: ${t.id})`).join('\n');
+  return (type) => `Fach: ${subjectName}\nThemen:\n${topicList}\n\nAuftrag: ${TASKS[type]}\n\nUnterlagen:\n${buildDocument(sources)}`;
+}
+
+function validate({ type, sources }) {
+  if (!SCHEMAS[type]) throw Object.assign(new Error('Unbekannter Inhaltstyp.'), { status: 400 });
+  if (!Array.isArray(sources) || !sources.length) throw Object.assign(new Error('Keine Unterlagen ausgewählt.'), { status: 400 });
+}
+
+async function generateWithOpenAi(request) {
+  if (!process.env.OPENAI_API_KEY) throw Object.assign(new Error('Kein API-Schlüssel für ChatGPT eingerichtet (OPENAI_API_KEY).'), { status: 400 });
+  validate(request);
+  const { type } = request;
+  const client = new OpenAI();
+  let completion;
+  try {
+    completion = await client.chat.completions.create({
+      model: OPENAI_MODEL(),
+      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: buildPrompt(request)(type) }],
+      response_format: { type: 'json_schema', json_schema: { name: `lernapp_${type}`, strict: true, schema: SCHEMAS[type] } },
+    });
+  } catch (e) {
+    if (e instanceof OpenAI.AuthenticationError) throw Object.assign(new Error('Der ChatGPT-Schlüssel wurde abgelehnt. Prüfe OPENAI_API_KEY.'), { status: 401 });
+    if (e instanceof OpenAI.RateLimitError) throw Object.assign(new Error('Zu viele Anfragen oder Guthaben bei OpenAI aufgebraucht. Bitte später erneut versuchen.'), { status: 429 });
+    if (e instanceof OpenAI.APIConnectionError) throw Object.assign(new Error('Keine Verbindung zu ChatGPT. Internetverbindung prüfen.'), { status: 503 });
+    if (e instanceof OpenAI.NotFoundError) throw Object.assign(new Error(`Das Modell «${OPENAI_MODEL()}» ist bei OpenAI nicht verfügbar. Setze OPENAI_MODEL auf ein verfügbares Modell.`), { status: 400 });
+    if (e instanceof OpenAI.APIError) throw Object.assign(new Error(`ChatGPT meldet Fehler ${e.status}: ${e.message}`), { status: 502 });
+    throw e;
+  }
+  const choice = completion.choices?.[0];
+  if (choice?.message?.refusal) throw Object.assign(new Error('ChatGPT hat die Anfrage abgelehnt.'), { status: 422 });
+  if (choice?.finish_reason === 'length') throw Object.assign(new Error('Die Antwort war zu lang. Bitte weniger Unterlagen auswählen.'), { status: 422 });
+  try {
+    return { data: JSON.parse(choice.message.content), model: completion.model, provider: 'chatgpt' };
+  } catch {
+    throw Object.assign(new Error('Die Antwort von ChatGPT war nicht lesbar. Bitte erneut versuchen.'), { status: 502 });
+  }
+}
+
+async function generateWithClaude({ type, subjectName, topics, sources }) {
   if (!process.env.ANTHROPIC_API_KEY) throw Object.assign(new Error('Kein API-Schlüssel eingerichtet (ANTHROPIC_API_KEY in der Datei .env).'), { status: 400 });
   if (!SCHEMAS[type]) throw Object.assign(new Error('Unbekannter Inhaltstyp.'), { status: 400 });
   if (!Array.isArray(sources) || !sources.length) throw Object.assign(new Error('Keine Unterlagen ausgewählt.'), { status: 400 });

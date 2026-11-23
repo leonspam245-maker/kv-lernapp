@@ -1,7 +1,7 @@
-// Anmeldung und Registrierung im Online-Betrieb.
-// Beliebig viele Konten; jedes Konto sieht nur die eigenen Daten (Row Level Security in der Datenbank).
+// Anmeldung und Registrierung (online über Supabase, lokal über den eigenen Server).
+// Beliebig viele Konten; jedes Konto sieht nur die eigenen Daten.
 import { esc } from './util.js';
-import { signIn, signUp } from './backend.js';
+import { signIn, signUp, isCloud } from './backend.js';
 
 const LEHRJAHRE = ['1. Lehrjahr', '2. Lehrjahr', '3. Lehrjahr'];
 
@@ -31,7 +31,7 @@ export function loginView(el, onDone) {
           ${signup ? '<p class="hint">Mindestens 8 Zeichen, davon mindestens eine Zahl.</p>' : ''}</div>
         ${signup ? '<div class="field"><label for="auth-pw2">Passwort wiederholen</label><input type="password" id="auth-pw2" autocomplete="new-password" minlength="8" required></div>' : ''}
         <label class="check" style="padding-top:0"><input type="checkbox" id="auth-show"> Passwort anzeigen</label>
-        ${signup ? `<label class="check"><input type="checkbox" id="auth-consent" ${v.consent ? 'checked' : ''}> <span>Ich bin einverstanden, dass meine Unterlagen und mein Lernfortschritt in meinem Konto gespeichert werden (Supabase, Rechenzentrum Zürich). Ich kann das Konto jederzeit löschen lassen.</span></label>` : ''}
+        ${signup ? `<label class="check"><input type="checkbox" id="auth-consent" ${v.consent ? 'checked' : ''}> <span>Ich bin einverstanden, dass meine Unterlagen und mein Lernfortschritt in meinem Konto gespeichert werden (${isCloud() ? 'Supabase, Rechenzentrum Zürich' : 'nur auf diesem Computer'}). Ich kann das Konto jederzeit löschen lassen.</span></label>` : ''}
         ${error ? `<div class="notice notice-bad" role="alert">${esc(error)}</div>` : ''}
         <button class="btn btn-primary btn-block" id="auth-submit">${signup ? 'Konto erstellen' : 'Anmelden'}</button>
         <p class="small muted" style="margin:16px 0 0">${signup
@@ -41,7 +41,7 @@ export function loginView(el, onDone) {
     </section>`;
     const form = el.querySelector('#auth-form');
     const val = (id) => form.querySelector(id)?.value ?? '';
-    const values = () => ({ email: val('#auth-email').trim(), name: val('#auth-name').trim(), year: val('#auth-year'), school: signup ? val('#auth-school').trim() : undefined, consent: form.querySelector('#auth-consent')?.checked });
+    const values = () => ({ email: val('#auth-email').trim(), name: val('#auth-name').trim(), year: val('#auth-year'), school: signup ? val('#auth-school').trim() : undefined, consent: form.querySelector('#auth-consent')?.checked, pw: val('#auth-pw'), pw2: val('#auth-pw2') });
     form.querySelector('#auth-show').addEventListener('change', (e) => {
       form.querySelectorAll('input[type=password], input[data-pw]').forEach((i) => { i.dataset.pw = '1'; i.type = e.target.checked ? 'text' : 'password'; });
     });
@@ -67,6 +67,9 @@ export function loginView(el, onDone) {
         render(err.message, v2);
       }
     });
+    // Passwörter nach einer Fehlermeldung nicht verlieren (nur im Speicher, nie im HTML)
+    if (v.pw) form.querySelector('#auth-pw').value = v.pw;
+    if (v.pw2 && form.querySelector('#auth-pw2')) form.querySelector('#auth-pw2').value = v.pw2;
     const first = signup ? (v.name ? form.querySelector('#auth-pw') : form.querySelector('#auth-name')) : (v.email ? form.querySelector('#auth-pw') : form.querySelector('#auth-email'));
     first?.focus();
   };
