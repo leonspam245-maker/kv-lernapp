@@ -166,6 +166,7 @@ function homeView(el) {
     const all = nextExam.plan?.units || [];
     const done = all.filter((u) => u.done).length;
     hero = `<section class="hero" aria-labelledby="hero-title">
+      <div class="hero-bg" aria-hidden="true">LERNEN</div>
       <p class="hero-date">${fmtDateLong(t)}</p>
       <h1 class="hero-count" id="hero-title"><span class="hero-num">${left}</span><span class="hero-text">${left === 1 ? 'Tag' : 'Tage'} bis zur Prüfung</span></h1>
       <p class="hero-sub">${esc(nextExam.title)} ${demoBadge(nextExam)}</p>
@@ -175,6 +176,7 @@ function homeView(el) {
     routeTile = `<section class="tile tile-route" aria-label="Dein Weg zur Prüfung"><div class="tile-head"><h2>Dein Weg zur Prüfung</h2><a class="link-more" href="#/pruefung/${nextExam.id}">Ganzer Plan</a></div><div class="route-wrap">${routeHtml(nextExam)}</div></section>`;
   } else {
     hero = `<section class="hero hero-empty" aria-labelledby="hero-title">
+      <div class="hero-bg" aria-hidden="true">LERNEN</div>
       <p class="hero-date">${fmtDateLong(t)}</p>
       <h1 class="hero-title" id="hero-title">Wann ist deine nächste Prüfung?</h1>
       <p class="hero-meta">Erfasse Datum, Themen und deine freie Zeit. Die App plant den Weg dorthin.</p>

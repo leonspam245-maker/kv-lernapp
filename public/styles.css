@@ -429,3 +429,128 @@ h1 .badge, h2 .badge, .big-number span, .figure + span { letter-spacing: normal;
 h1 .badge { vertical-align: .6em; }
 .big-number .muted { margin: 0 4px; }
 .flashcard:focus-visible { outline: 2px solid rgba(36,87,230,.35); outline-offset: 6px; }
+
+/* =====================================================================
+   Look nach dem Upwise-Entwurf (Dribbble), umgesetzt im Farbschema:
+   kräftiger Farbgrund mit Punkteraster, wuchtige Titel (Arial Black),
+   gestreifte schwarze Pillen, helle Karten mit dickem Rahmen.
+   ===================================================================== */
+:root {
+  --bg: color-mix(in srgb, var(--accent) 70%, var(--paper));      /* heller Kobaltgrund, Anthrazit-Text darauf lesbar */
+  --bg-light: color-mix(in srgb, var(--accent) 48%, var(--paper));
+  --display: "Arial Black", "Arial", "Helvetica Neue", sans-serif;
+  --border: 3px solid var(--ink);
+  --lift: 0 6px 0 var(--ink);
+  --stripes: repeating-linear-gradient(135deg, var(--ink) 0 7px, color-mix(in srgb, var(--ink) 86%, var(--paper)) 7px 14px);
+}
+html { background: var(--bg); }
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--ink) 16%, transparent) 1.2px, transparent 1.6px),
+    radial-gradient(120% 80% at 85% 100%, var(--bg-light) 0%, transparent 60%);
+  background-size: 22px 22px, 100% 100%;
+  background-attachment: fixed, fixed;
+}
+
+/* Wuchtige Titel */
+h1, h2, .hero-text, .hero-title, .figure, .big-number, .hero-num, .face-front .term, .section-head h2 {
+  font-family: var(--display); font-weight: 900;
+}
+h1 { text-transform: uppercase; letter-spacing: -0.02em; line-height: .95; }
+h2 { letter-spacing: -0.01em; }
+.page-head p, .page-head .eyebrow, .page-head .eyebrow a { color: var(--ink); }
+.page-head .eyebrow a { text-decoration: underline; text-underline-offset: 3px; }
+main > .empty, main > .empty h3, main > p.small, .flashcard ~ .small { color: var(--ink); }
+main > .page-head .muted, main > .page-head span.muted { color: var(--ink); }
+
+/* Kopfleiste: Wortmarke wie «UPWISE» */
+.topbar { background: color-mix(in srgb, var(--bg) 85%, transparent); border-bottom: var(--border); }
+.brand { font-family: var(--display); font-weight: 900; font-size: 1.25rem; letter-spacing: .02em; text-transform: uppercase; color: var(--ink); }
+.save-state { color: var(--ink); }
+@media (min-width: 900px) {
+  .nav a { color: var(--ink); font-weight: 700; }
+  .nav a:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+  .nav a.active { background: var(--ink); color: var(--paper); }
+}
+@media (max-width: 899px) {
+  .nav { background: var(--ink); border-top: 0; }
+  .nav a { color: var(--on-dark-muted); }
+  .nav a.active { color: var(--paper); }
+}
+
+/* Karten wie das Handy im Entwurf: hell, dicker Rahmen, harte Kante */
+.card, .tile { background: var(--paper); border: var(--border); box-shadow: var(--lift); border-radius: 32px; }
+.tile-dark { background: var(--ink); }
+.unit, .tile .unit, .card .unit { background: var(--surface); border: 2px solid var(--ink); }
+.option { background: var(--surface); border: 2px solid var(--ink); }
+.option:hover { background: var(--accent-soft); }
+.page-review, .md-preview { background: var(--surface); border: 2px solid var(--ink); }
+.dropzone { background: var(--surface); border: 3px dashed var(--ink); }
+input[type=text], input[type=url], input[type=date], input[type=number], input[type=email], input[type=password], select, textarea { border: 2px solid var(--ink); background: var(--surface); }
+.notice { border: 2px solid var(--ink); }
+main > .notice { box-shadow: 0 4px 0 var(--ink); }
+
+/* Knöpfe: schwarze Pillen mit Streifen, Schrift gesperrt */
+.btn { border: 2px solid var(--ink); color: var(--ink); background: var(--paper); letter-spacing: .04em; }
+.btn:hover { background: var(--ink); color: var(--paper); }
+.btn-primary { background: var(--stripes); border-color: var(--ink); color: var(--paper); box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 55%, var(--accent)); }
+.btn-primary:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.btn-primary:active { transform: translateY(3px); box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 55%, var(--accent)); }
+.btn-primary[disabled]:hover { background: var(--stripes); }
+.btn[disabled]:hover { background: var(--paper); color: var(--ink); }
+.btn-danger { border-color: var(--bad); }
+.tile-dark .btn-primary, .result-hero .btn-primary { background: var(--paper); color: var(--ink); border-color: var(--paper); box-shadow: none; }
+.tabs { background: var(--surface); border: 2px solid var(--ink); }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); box-shadow: none; }
+.card .tabs { background: var(--surface); }
+.link-more { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+a { color: var(--accent-ink); }
+.badge-accent, .ref { background: var(--ink); color: var(--paper); }
+.ref:hover { background: var(--accent); }
+.unit-check { border-color: var(--ink); }
+.unit-check:checked { background: var(--ink); border-color: var(--ink); }
+.kind { color: var(--accent-ink); }
+.progress { background: color-mix(in srgb, var(--ink) 12%, var(--paper)); border: 2px solid var(--ink); height: 12px; }
+.progress span { background: var(--stripes); border-radius: 0; }
+
+/* Startbereich: riesiges Hintergrundwort, schwarze Zahl davor */
+.hero { position: relative; isolation: isolate; }
+.hero-bg { position: absolute; z-index: -1; left: 50%; top: 46%; transform: translate(-50%, -50%); font-family: var(--display); font-weight: 900;
+  font-size: clamp(7rem, 30vw, 26rem); line-height: 1; letter-spacing: -0.04em; color: var(--paper); opacity: .9; white-space: nowrap; pointer-events: none; user-select: none; }
+.hero-date { color: var(--ink); }
+.hero-num { background: none; color: var(--ink); -webkit-text-fill-color: var(--ink); letter-spacing: -0.06em; }
+.hero-text { text-transform: uppercase; letter-spacing: -0.02em; }
+.hero-sub, .hero-meta { color: var(--ink); }
+.hero-title { text-transform: uppercase; }
+.hero-ctas .btn:not(.btn-primary) { background: var(--paper); }
+
+/* Karteikarte und Auswertung */
+.face-front { border: var(--border); }
+.face-front .term { text-transform: uppercase; letter-spacing: -0.01em; }
+.face-back { border: var(--border); }
+.flashcard-inner { filter: drop-shadow(0 6px 0 var(--ink)); }
+.result-hero { border: var(--border); }
+.btn-known { background: var(--stripes); border-color: var(--ink); color: var(--paper); }
+.btn-again { background: var(--paper); border-color: var(--ink); color: var(--ink); }
+
+/* Route auf heller Karte */
+.stop.is-done .stop-dot, .stop-dot { border-color: var(--ink); }
+.stop.is-done .stop-dot { background: var(--ink); }
+.stop.is-done::before { background: var(--ink); }
+.stop.is-partial .stop-dot { background: linear-gradient(90deg, var(--ink) 50%, var(--bg) 50%); }
+.stop.is-today .stop-dot { background: var(--accent); border-color: var(--ink); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent); }
+.stop.is-today .stop-day { color: var(--accent-ink); }
+.route { --line-c: color-mix(in srgb, var(--ink) 35%, var(--paper)); --bg: var(--paper); }
+main > .route-wrap { background: var(--paper); border: var(--border); box-shadow: var(--lift); border-radius: 32px; }
+
+/* Anmeldung */
+.auth-intro .hero-date { color: var(--ink); }
+.auth-intro .hero-meta { color: var(--ink); }
+.day.today h3::after { background: var(--ink); }
+
+@media print { body { background: #fff; } .card, .tile { border: 0; box-shadow: none; } }
+/* Startbereich über die ganze Breite, Hintergrundwort sauber abgeschnitten */
+.hero { margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); padding-left: 16px; padding-right: 16px; overflow: hidden; }
+.hero-bg { opacity: .55; top: 50%; }
+body { background-attachment: scroll, scroll; min-height: 100vh; }
