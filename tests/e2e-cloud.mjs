@@ -109,17 +109,30 @@ try {
     await page.goto(BASE + '/'); await page.waitForSelector('.hero-num');
   });
 
-  await check('Zweites Konto wird abgelehnt', async () => {
+  await check('Weitere Konten möglich, jedes sieht nur die eigenen Daten', async () => {
     const other = await browser.newContext();
     const p2 = await other.newPage();
     await p2.goto(BASE + '/');
-    await p2.evaluate((s) => localStorage.setItem('mock-supabase', JSON.stringify({ ...s, session: null })), await mockState());
+    await p2.evaluate((st) => localStorage.setItem('mock-supabase', JSON.stringify({ ...st, session: null })), await mockState());
     await p2.reload(); await p2.waitForSelector('#auth-form');
     await p2.click('#auth-switch');
-    await p2.fill('#auth-name', 'Jemand');
-    await p2.fill('#auth-email', 'jemand@example.ch');
+    await p2.fill('#auth-name', 'Noah');
+    await p2.fill('#auth-email', 'noah@example.ch');
     await p2.fill('#auth-pw', 'anderes-passwort1');
     await p2.fill('#auth-pw2', 'anderes-passwort1');
+    await p2.check('#auth-consent');
+    await p2.click('#auth-submit');
+    await p2.waitForSelector('.home-grid');
+    assert.match(await p2.innerText('.hero-date'), /Hallo Noah\./);
+    assert.doesNotMatch(await p2.innerText('main'), /W&G-Prüfung Vertragsrecht/, 'keine fremden Daten');
+    // Bestehende E-Mail-Adresse mit anderem Passwort
+    await p2.evaluate(() => { const s = JSON.parse(localStorage.getItem('mock-supabase')); s.session = null; localStorage.setItem('mock-supabase', JSON.stringify(s)); });
+    await p2.reload(); await p2.waitForSelector('#auth-form');
+    await p2.click('#auth-switch');
+    await p2.fill('#auth-name', 'Doppelt');
+    await p2.fill('#auth-email', 'noah@example.ch');
+    await p2.fill('#auth-pw', 'drittes-passwort1');
+    await p2.fill('#auth-pw2', 'drittes-passwort1');
     await p2.check('#auth-consent');
     await p2.click('#auth-submit');
     assert.match(await p2.innerText('.notice-bad'), /bereits ein Konto/);

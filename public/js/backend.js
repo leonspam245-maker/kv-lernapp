@@ -30,7 +30,7 @@ export async function currentUser() {
 const authError = (error) => {
   const m = error?.message || '';
   if (/invalid login credentials/i.test(m)) return 'E-Mail-Adresse oder Passwort stimmt nicht.';
-  if (/registrierung ist geschlossen|database error saving new user/i.test(m)) return 'Für diese Lernapp gibt es bereits ein Konto. Melde dich mit diesem Konto an.';
+  if (/database error saving new user/i.test(m)) return 'Das Konto konnte nicht erstellt werden. Bitte später erneut versuchen.';
   if (/already registered/i.test(m)) return 'Diese E-Mail-Adresse ist bereits registriert. Bitte anmelden.';
   if (/password should be at least/i.test(m)) return 'Das Passwort muss mindestens 8 Zeichen lang sein.';
   if (/rate limit/i.test(m)) return 'Zu viele Versuche. Bitte einige Minuten warten.';
@@ -48,7 +48,9 @@ export async function signUp(email, password, profile = {}) {
   try {
     await signIn(email, password);
   } catch (signInError) {
-    throw new Error(error ? authError(error) : signInError.message);
+    if (error) throw new Error(authError(error));
+    // Gibt es die E-Mail-Adresse schon mit anderem Passwort, meldet Supabase keinen Fehler; die Anmeldung scheitert dann.
+    throw new Error('Mit dieser E-Mail-Adresse besteht bereits ein Konto. Bitte anmelden.');
   }
 }
 export async function signOut() {

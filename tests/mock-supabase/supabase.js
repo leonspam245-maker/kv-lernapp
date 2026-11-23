@@ -12,10 +12,11 @@
       async getSession() { await delay(); const db = load(); return { data: { session: db.session } }; },
       async signUp({ email, password, options }) {
         await delay(); const db = load();
-        if (db.users.length) return { error: { message: 'Database error saving new user' } };
+        if (db.users.some((x) => x.email === email)) return { data: { user: null }, error: null }; // wie Supabase: kein Hinweis auf bestehende Adresse
         if (password.length < 8) return { error: { message: 'Password should be at least 8 characters' } };
-        db.users.push({ id: 'u1', email, password, user_metadata: options?.data || {} }); save(db);
-        return { data: { user: { id: 'u1', email } }, error: null };
+        const id = 'u' + (db.users.length + 1);
+        db.users.push({ id, email, password, user_metadata: options?.data || {} }); save(db);
+        return { data: { user: { id, email } }, error: null };
       },
       async signInWithPassword({ email, password }) {
         await delay(); const db = load();

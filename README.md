@@ -10,7 +10,7 @@ Die Lernapp läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentru
 - **Android (Chrome):** Menü ⋮, dann «App installieren».
 - **Computer (Chrome/Edge):** Installieren-Symbol in der Adresszeile.
 
-Beim ersten Öffnen richtest du über «Konto einrichten» dein Konto ein. Danach ist die Registrierung geschlossen; weitere Konten werden von der Datenbank abgelehnt.
+Über «Konto einrichten» kann sich jede Person ein eigenes Konto anlegen. Jedes Konto sieht nur die eigenen Unterlagen und den eigenen Lernstand (Row Level Security in der Datenbank).
 
 Technik: `public/config.json` enthält die öffentliche Supabase-Adresse und den publishable Key (dieser Schlüssel ist für den Browser gedacht; geschützt wird über Anmeldung und Row Level Security). `vercel.json` und `scripts/build-vercel.mjs` steuern das Hosting, `api/` enthält die Vercel-Funktionen. Für den optionalen KI-Dienst wird `ANTHROPIC_API_KEY` als Umgebungsvariable bei Vercel hinterlegt.
 

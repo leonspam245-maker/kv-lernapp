@@ -1,5 +1,5 @@
 // Anmeldung und Registrierung im Online-Betrieb.
-// Es gibt genau ein Konto: Wer sich zuerst registriert, besitzt die Lernapp (die Datenbank lehnt weitere ab).
+// Beliebig viele Konten; jedes Konto sieht nur die eigenen Daten (Row Level Security in der Datenbank).
 import { esc } from './util.js';
 import { signIn, signUp } from './backend.js';
 
@@ -16,7 +16,7 @@ export function loginView(el, onDone) {
         <p class="hero-date">Deine Lernapp für die KV-Lehre</p>
         <h1 class="hero-title" id="auth-title">${signup ? 'Konto einrichten.' : 'Willkommen zurück.'}</h1>
         <p class="hero-meta">${signup
-          ? 'Einmalig: Lege dein Konto an. Danach ist die Registrierung geschlossen, und nur du hast Zugriff auf deine Daten.'
+          ? 'Lege dein persönliches Konto an. Deine Unterlagen und dein Lernstand sind nur für dich sichtbar.'
           : 'Melde dich an, um deine Unterlagen, Karteikarten und deinen Lernplan auf jedem Gerät zu sehen.'}</p>
       </div>
       <form class="auth-form card" id="auth-form" novalidate>

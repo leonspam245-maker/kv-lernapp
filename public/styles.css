@@ -564,3 +564,42 @@ body, button, input, select, textarea, .btn, .tabs button, .nav a, .toast { font
 .title, .def dt, .stop-day, .kind, label, th { font-family: var(--mono); font-weight: 700; }
 h1, h2, h3, .brand, .hero-num, .hero-text, .hero-title, .figure, .big-number, .face-front .term, .section-head h2 { font-family: var(--display); }
 .hero-sub, .hero-meta, .page-head p, .tile-lead { letter-spacing: -0.01em; }
+
+/* =====================================================================
+   Orange wie im Upwise-Screenshot: Rotorange oben, Pfirsich unten,
+   schwarze Titel und Knöpfe, weisse Riesenbuchstaben im Hintergrund.
+   ===================================================================== */
+:root {
+  --accent: #E8442C;                                   /* Rotorange für Aktionen und Hervorhebungen */
+  --accent-ink: #B5301B;                               /* dunkler für Links auf hellem Grund (gut lesbar) */
+  --ink: #1D1B1A;
+  --paper: #FBF6F1;
+  --bg: #F05A3C;
+  --bg-top: #EC3F2B;
+  --bg-bottom: #F8A487;
+}
+html { background: var(--bg); }
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1.2px, transparent 1.6px),
+    linear-gradient(165deg, var(--bg-top) 0%, var(--bg) 40%, var(--bg-bottom) 100%);
+  background-size: 22px 22px, 100% 100%;
+}
+.topbar { background: color-mix(in srgb, var(--bg-top) 88%, transparent); }
+.hero-bg { color: #fff; opacity: .92; }
+.btn-primary { box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 60%, var(--accent)); }
+.stop.is-today .stop-dot { background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent); }
+.stop.is-today .stop-day, .kind { color: var(--accent-ink); }
+.ref:hover { background: var(--accent); }
+.option:has(input:checked) { border-color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
+input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+:focus-visible { outline-color: var(--ink); }
+/* Schmale Bildschirme: Zusatzangabe unter den Titel statt daneben (breite Schreibmaschinenschrift) */
+@media (max-width: 640px) {
+  .link-list .list-link { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; }
+  .link-list .list-link > .title { grid-column: 1; }
+  .link-list .list-link > .meta { grid-column: 1; text-align: left; margin-top: 2px; }
+  .link-list .list-link::after { grid-column: 2; grid-row: 1 / span 2; }
+}
+.hero-sub, .hero-meta { position: relative; }
