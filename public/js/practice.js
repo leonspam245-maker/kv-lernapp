@@ -1,5 +1,5 @@
 // Üben: Lerninhalte erstellen, Merkblatt anzeigen, Karteikarten, Quiz und Probeprüfung.
-import { store, commit, byId, subjectName, topicName, sourceTitle, topicsOf } from './store.js';
+import { store, commit, saveProgress, byId, subjectName, topicName, sourceTitle, topicsOf } from './store.js';
 import { esc, uid, todayISO, fmtDateTime, plural, norm, shuffle } from './util.js';
 import { toast, confirmDialog, refChips, originBadge, emptyState, renderMarkdown } from './ui.js';
 import { buildMerkblatt, buildCards, buildQuestions, grade, swissGrade } from './gen.js';
@@ -179,7 +179,7 @@ export function contentView(el, id) {
   });
   const body = el.querySelector('#content-body');
   if (c.type === 'merkblatt') renderMerkblatt(body, c);
-  else if (c.type === 'quiz') runQuiz(body, c, c.data.questions);
+  else if (c.type === 'quiz') startQuiz(body, c);
   else runExam(body, c);
 }
 
@@ -205,6 +205,12 @@ function questionInputHtml(q, name, disabled = false) {
     return q.pairs.map((p, i) => `<div class="match-row" data-match="${i}"><strong>${esc(p.left)}</strong><select name="${name}-${i}" aria-label="Beschreibung für ${esc(p.left)}" ${disabled ? 'disabled' : ''}><option value="">Bitte wählen …</option>${order.map((j) => `<option value="${j}">${esc(q.pairs[j].right)}</option>`).join('')}</select></div>`).join('');
   }
   return `<textarea name="${name}" style="min-height:110px" placeholder="Deine Antwort …" aria-label="Antwort" ${disabled ? 'disabled' : ''}></textarea>`;
+}
+function fillAnswer(root, q, name, a) {
+  if (a === null || a === undefined) return;
+  if (q.type === 'mc' || q.type === 'tf') { const i = root.querySelector(`input[name="${name}"][value="${String(a)}"]`); if (i) i.checked = true; }
+  else if (q.type === 'match') (a || []).forEach((v, i) => { const sel = root.querySelector(`select[name="${name}-${i}"]`); if (sel && v !== null) sel.value = String(v); });
+  else { const t = root.querySelector(`textarea[name="${name}"]`); if (t) t.value = a; }
 }
 function readAnswer(root, q, name) {
   if (q.type === 'mc') { const v = root.querySelector(`input[name="${name}"]:checked`); return v ? Number(v.value) : null; }
@@ -239,19 +245,33 @@ function markOptions(root, q, answer) {
   if (q.type === 'match') root.querySelectorAll('[data-match]').forEach((r) => r.classList.add(answer?.[Number(r.dataset.match)] === Number(r.dataset.match) ? 'correct' : 'wrong'));
 }
 
-async function saveAttempt(c, type, items) {
-  const att = {
-    id: uid('a'), contentId: c.id, type, date: todayISO(), at: new Date().toISOString(),
+function buildAttempt(c, type, items, id = uid('a')) {
+  return {
+    id, contentId: c.id, type, date: todayISO(), at: new Date().toISOString(),
     score: items.reduce((s, x) => s + x.points, 0), max: items.reduce((s, x) => s + x.maxPoints, 0),
     answers: items.map((x) => ({ qid: x.q.id, topicId: x.q.topicId, prompt: x.q.prompt.split('\n')[0].slice(0, 140), points: x.points, maxPoints: x.maxPoints })),
   };
-  await commit((d) => d.attempts.push(att));
-  return att;
+}
+const SAVED_LATER = 'Festgehalten. Gespeichert wird automatisch, sobald wieder eine Verbindung besteht.';
+
+// Angefangenes Quiz fortsetzen oder neu beginnen
+function startQuiz(el, c) {
+  const s = store.db.sessions[c.id];
+  const byQid = new Map(c.data.questions.map((q) => [q.id, q]));
+  const valid = s?.kind === 'quiz' && s.order?.every((id) => byQid.has(id)) && s.idx > 0 && s.idx < s.order.length;
+  if (!valid) return runQuiz(el, c, c.data.questions);
+  el.innerHTML = `<section class="card"><div class="eyebrow">Angefangenes Quiz</div>
+    <p><strong>Du warst bei Frage ${s.idx + 1} von ${s.order.length}.</strong> Deine bisherigen ${plural(s.idx, 'Antwort ist', 'Antworten sind')} gespeichert (${fmtDateTime(s.at)}).</p>
+    <div class="row"><button class="btn btn-primary" id="resume">Fortsetzen</button><button class="btn" id="restart">Neu beginnen</button></div></section>`;
+  el.querySelector('#resume').addEventListener('click', () => runQuiz(el, c, s.order.map((id) => byQid.get(id)), {
+    idx: s.idx, results: s.results.filter((r) => byQid.has(r.qid)).map((r) => ({ q: byQid.get(r.qid), points: r.points, maxPoints: byQid.get(r.qid).points })),
+  }));
+  el.querySelector('#restart').addEventListener('click', () => { saveProgress({ kind: 'session', contentId: c.id, value: null }); runQuiz(el, c, c.data.questions); });
 }
 
 // ---------- Quiz ----------
-function runQuiz(el, c, questions) {
-  let idx = 0; const results = [];
+function runQuiz(el, c, questions, resume = null) {
+  let idx = resume?.idx || 0; const results = resume?.results || [];
   const step = () => {
     if (idx >= questions.length) return finish();
     const q = questions[idx];
@@ -268,7 +288,12 @@ function runQuiz(el, c, questions) {
       markOptions(el, q, answer);
       el.querySelector('#fb').innerHTML = solutionHtml(q, answer, r);
       const actions = el.querySelector('#actions');
-      const next = (points) => { results.push({ q, points, maxPoints: q.points }); idx++; step(); window.scrollTo(0, 0); };
+      const next = (points) => {
+        results.push({ q, points, maxPoints: q.points }); idx++;
+        // Nach jeder Frage festhalten, damit ein Abbruch nichts verliert
+        if (idx < questions.length) saveProgress({ kind: 'session', contentId: c.id, value: { kind: 'quiz', order: questions.map((x) => x.id), idx, results: results.map((x) => ({ qid: x.q.id, points: x.points })), at: new Date().toISOString() } });
+        step(); window.scrollTo(0, 0);
+      };
       if (q.type === 'open' && r.status === 'unklar') {
         actions.innerHTML = `<span class="small muted" style="flex:1">Wie viele Punkte gibst du dir?</span>${[...Array(q.points + 1).keys()].reverse().map((p) => `<button class="btn ${p === q.points ? 'btn-known' : p === 0 ? 'btn-again' : ''}" data-self="${p}">${p} P.</button>`).join('')}`;
         actions.querySelectorAll('[data-self]').forEach((b) => b.addEventListener('click', () => next(Number(b.dataset.self))));
@@ -287,8 +312,8 @@ function runQuiz(el, c, questions) {
       ${wrong.length ? `<section class="card"><h2 style="margin-top:0">Noch üben</h2><ul>${wrong.map((q) => `<li>${esc(q.prompt.split('\n')[0])} ${refChips(q.refs, store.db)}</li>`).join('')}</ul></section>` : ''}`;
     el.querySelector('#again').addEventListener('click', () => runQuiz(el, c, shuffle(c.data.questions)));
     el.querySelector('#retry')?.addEventListener('click', () => runQuiz(el, c, wrong));
-    try { await saveAttempt(c, 'quiz', results); el.querySelector('#saved').textContent = 'Ergebnis gespeichert. Fehler fliessen in Statistik und Lernplan ein.'; }
-    catch (e) { el.querySelector('#saved').textContent = 'Ergebnis konnte nicht gespeichert werden.'; toast(e.message, 'error'); }
+    const saved = await saveProgress({ kind: 'attempt', attempt: buildAttempt(c, 'quiz', results) }, { kind: 'session', contentId: c.id, value: null });
+    el.querySelector('#saved').textContent = saved ? 'Ergebnis gespeichert. Fehler fliessen in Statistik und Lernplan ein.' : SAVED_LATER;
   };
   step();
 }
@@ -303,11 +328,27 @@ function runExam(el, c) {
     <div class="row end"><button class="btn btn-primary" id="submit">Prüfung abgeben</button></div></form>
     <div id="result"></div>`;
   el.querySelector('#exam').addEventListener('submit', (e) => e.preventDefault());
+  // Antworten laufend speichern und beim nächsten Öffnen wiederherstellen
+  const draft = store.db.sessions[c.id];
+  if (draft?.kind === 'exam' && Array.isArray(draft.answers) && draft.answers.length === qs.length) {
+    qs.forEach((q, i) => fillAnswer(el, q, `q${i}`, draft.answers[i]));
+    el.querySelector('#exam').insertAdjacentHTML('afterbegin', `<div class="notice notice-info small" id="restored">Deine Antworten vom ${fmtDateTime(draft.at)} wurden wiederhergestellt. <button type="button" class="btn-link" id="clear-draft">Leer neu beginnen</button></div>`);
+    el.querySelector('#clear-draft').addEventListener('click', () => { saveProgress({ kind: 'session', contentId: c.id, value: null }); runExam(el, c); });
+  }
+  let draftTimer = null;
+  const saveDraft = () => saveProgress({ kind: 'session', contentId: c.id, value: { kind: 'exam', answers: qs.map((q, i) => readAnswer(el, q, `q${i}`)), at: new Date().toISOString() } });
+  const scheduleDraft = () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 700); };
+  el.querySelector('#exam').addEventListener('input', scheduleDraft);
+  el.querySelector('#exam').addEventListener('change', scheduleDraft);
   el.querySelector('#submit').addEventListener('click', async () => {
     const answers = qs.map((q, i) => readAnswer(el, q, `q${i}`));
     const open = answers.filter((a, i) => isEmpty(qs[i], a)).length;
     if (open && !(await confirmDialog(`${plural(open, 'Aufgabe ist', 'Aufgaben sind')} noch nicht beantwortet. Trotzdem abgeben?`, { ok: 'Abgeben' }))) return;
+    clearTimeout(draftTimer);
     const graded = qs.map((q, i) => ({ q, answer: answers[i], r: grade(q, answers[i]) }));
+    // Ergebnis sofort festhalten (offene Antworten mit dem Vorschlag); bestätigte Punkte ersetzen es danach
+    const attemptId = uid('a');
+    saveProgress({ kind: 'attempt', attempt: buildAttempt(c, 'exam', graded.map((g) => ({ q: g.q, points: g.r.points, maxPoints: g.q.points })), attemptId) }, { kind: 'session', contentId: c.id, value: null });
     el.querySelectorAll('#exam input, #exam select, #exam textarea').forEach((x) => (x.disabled = true));
     el.querySelector('#submit').remove();
     graded.forEach((g, i) => {
@@ -331,15 +372,16 @@ function runExam(el, c) {
         }
         items.push({ q: g.q, points: pts, maxPoints: g.q.points });
       }
-      try {
-        const att = await saveAttempt(c, 'exam', items);
+      {
+        const att = buildAttempt(c, 'exam', items, attemptId);
+        const saved = await saveProgress({ kind: 'attempt', attempt: att });
         const note = swissGrade(att.score, att.max);
         res.innerHTML = `<section class="card result-hero"><div class="eyebrow">Ergebnis</div><div class="big-number">${att.score} / ${att.max}</div>
           <p>Note ca. <strong>${note.toFixed(1)}</strong> <span class="small muted">(Punkte ÷ Maximum × 5 + 1, auf halbe Noten gerundet – deine Schule kann anders rechnen)</span></p>
-          <p class="small muted">Gespeichert. Fehler fliessen in Statistik und Lernplan ein.</p>
+          <p class="small muted">${saved ? 'Gespeichert. Fehler fliessen in Statistik und Lernplan ein.' : SAVED_LATER}</p>
           <div class="row" style="justify-content:center"><button class="btn" id="again">Erneut lösen</button><a class="btn" href="#/plan">Zum Lernplan</a></div></section>`;
         res.querySelector('#again').addEventListener('click', () => { runExam(el, c); window.scrollTo(0, 0); });
-      } catch (e) { toast(e.message, 'error'); }
+      }
     });
     res.scrollIntoView({ behavior: 'smooth' });
   });
@@ -360,7 +402,7 @@ export function cardsView(el, _id, query) {
       emptyState('Keine Karten fällig', `Alle ${plural(all.length, 'Karte ist', 'Karten sind')} für heute erledigt.`, `<a class="btn btn-primary" href="#/karten?themen=${topicIds.join(',')}&alle=1">Trotzdem alle üben</a>`);
     return;
   }
-  const reinserted = new Map(); let known = 0; let again = 0; let flipped = false;
+  const reinserted = new Map(); let known = 0; let again = 0; let flipped = false; let offlineHint = false;
   const show = () => {
     if (!queue.length) {
       const nextDue = db.cards.filter((c) => all.some((a) => a.id === c.id) && c.due > t).map((c) => c.due).sort()[0];
@@ -390,9 +432,9 @@ export function cardsView(el, _id, query) {
     fc.focus({ preventScroll: true });
   };
   const rate = async (card, ok) => {
-    try {
-      await commit((d) => { const i = d.cards.findIndex((x) => x.id === card.id); if (i >= 0) d.cards[i] = { ...d.cards[i], ...rateCard(d.cards[i], ok, todayISO()) }; });
-    } catch (e) { toast(`Bewertung nicht gespeichert: ${e.message}`, 'error'); return; }
+    // Bewertung gilt sofort; ohne Verbindung wird das Speichern automatisch nachgeholt
+    saveProgress({ kind: 'card', cardId: card.id, fields: rateCard(card, ok, todayISO()) })
+      .then((saved) => { if (!saved && !offlineHint) { offlineHint = true; toast(SAVED_LATER, 'info'); } });
     queue.shift();
     if (ok) known++;
     else {

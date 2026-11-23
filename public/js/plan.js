@@ -1,5 +1,5 @@
 // Prüfungen erfassen und Lernplan anzeigen, abhaken, verschieben, neu berechnen.
-import { store, commit, byId, subjectName, topicName, topicsOf } from './store.js';
+import { store, commit, saveProgress, byId, subjectName, topicName, topicsOf } from './store.js';
 import { esc, uid, todayISO, addDays, diffDays, fmtDate, fmtDateLong, fmtDateShort, WEEKDAYS, plural } from './util.js';
 import { toast, confirmDialog, emptyState, progressBar, demoBadge } from './ui.js';
 import { buildPlan, moveUnit, KIND_LABEL } from './planner.js';
@@ -40,14 +40,12 @@ function unitResult(u) {
 }
 
 export async function toggleUnit(examId, unitId, done) {
-  await commit((d) => {
-    const ex = d.exams.find((e) => e.id === examId);
-    const u = ex.plan.units.find((x) => x.id === unitId);
-    u.done = done;
-    u.doneAt = done ? new Date().toISOString() : null;
-    u.result = done ? unitResult(u) : null;
-    if (done && u.date > todayISO()) u.date = todayISO(); // vorgezogen erledigt
-  });
+  const u = store.db.exams.find((e) => e.id === examId)?.plan?.units.find((x) => x.id === unitId);
+  if (!u) return true;
+  const fields = { done, doneAt: done ? new Date().toISOString() : null, result: done ? unitResult(u) : null };
+  if (done && u.date > todayISO()) fields.date = todayISO(); // vorgezogen erledigt
+  // Häkchen gilt sofort; ohne Verbindung wird das Speichern nachgeholt
+  return saveProgress({ kind: 'unit', examId, unitId, fields });
 }
 
 export function unitStartLink(exam, u) {

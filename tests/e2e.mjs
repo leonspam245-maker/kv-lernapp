@@ -47,6 +47,16 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 const go = async (hash) => { await page.goto(BASE + '/' + hash); await page.waitForSelector('main h1'); };
+// Wartet, bis aller Lernfortschritt beim Server gespeichert ist
+const settled = (p = page) => p.waitForFunction(() => !Object.keys(localStorage).some((k) => k.startsWith('kv-lernapp:fortschritt:')) && document.querySelector('#save-state')?.dataset.state !== 'saving');
+async function answerAny(p, q) {
+  if (q.type === 'mc') await p.locator('[data-opt] input').first().check();
+  if (q.type === 'tf') await p.locator('[data-opt="true"] input').check();
+  if (q.type === 'match') for (let k = 0; k < q.pairs.length; k++) await p.selectOption(`select[name="a-${k}"]`, String(k));
+  if (q.type === 'open') await p.fill('textarea[name=a]', q.model);
+  await p.click('#check'); await p.waitForSelector('.feedback');
+  if (await p.locator('[data-self]').count()) await p.click('[data-self="0"]'); else await p.click('#next');
+}
 const toastText = async () => (await page.locator('.toast').allTextContents()).join(' | ');
 async function chooseTarget(subject, topic) {
   const subj = page.locator('#imp-subject');
@@ -325,10 +335,50 @@ try {
     await page.waitForFunction((t) => document.querySelector('.face-front .term')?.textContent !== t, firstTerm);
     for (let i = 0; i < 3; i++) { await page.click('#fc'); await page.click('[data-rate="1"]'); await page.waitForTimeout(150); }
     assert.equal(await page.textContent('.face-front .term'), firstTerm, '«Noch üben»-Karte kommt nach 3 Karten wieder');
+    await settled();
     const after = await state();
     const again = after.cards.find((c) => c.term === firstTerm);
     assert.equal(again.wrong, 1); assert.equal(again.box, 0);
     assert.ok(after.cards.filter((c) => c.box === 1).length >= 3);
+  });
+
+  // ---------- 9b. Lernfortschritt geht nie verloren ----------
+  await check('Lernfortschritt bleibt: Quiz fortsetzen, Prüfungsantworten zurück, Speichern ohne Verbindung nachgeholt', async () => {
+    let db = await state();
+    // Quiz nach zwei Fragen abbrechen und nach dem Neuladen fortsetzen
+    const quiz = db.contents.find((c) => c.type === 'quiz');
+    await go(`#/inhalt/${quiz.id}`);
+    for (let i = 0; i < 2; i++) await answerAny(page, quiz.data.questions[i]);
+    await page.waitForSelector('.eyebrow:has-text("Frage 3 von")');
+    await settled();
+    db = await state();
+    assert.equal(db.sessions[quiz.id]?.idx, 2, 'Stand nach jeder Frage gespeichert');
+    await page.reload(); await page.waitForSelector('#resume');
+    assert.match(await page.innerText('main'), /Frage 3 von/);
+    await page.click('#resume');
+    await page.waitForSelector('.eyebrow:has-text("Frage 3 von")');
+    // Probeprüfung: Antwort eintippen, neu laden, Antwort ist wieder da
+    const exam = db.contents.find((c) => c.type === 'exam');
+    await go(`#/inhalt/${exam.id}`);
+    await page.locator('#exam textarea').first().fill('Mein Entwurf zur Aufgabe');
+    await page.waitForTimeout(1200); await settled();
+    await page.reload(); await page.waitForSelector('#restored');
+    assert.equal(await page.locator('#exam textarea').first().inputValue(), 'Mein Entwurf zur Aufgabe');
+    // Karteikarte ohne Verbindung bewerten: Bewertung bleibt und wird nach dem Neuladen gespeichert
+    const topic = db.topics.find((t) => t.name === 'Vertragsarten');
+    await go(`#/karten?themen=${topic.id}&alle=1`);
+    const term = await page.textContent('.face-front .term');
+    const before = db.cards.find((c) => c.term === term);
+    await page.route('**/api/state', (rt) => (rt.request().method() === 'PUT' ? rt.abort() : rt.continue()));
+    await page.click('#fc'); await page.click('[data-rate="1"]');
+    await page.waitForSelector('#save-state[data-state="offline"]');
+    assert.match(await toastText(), /sobald wieder eine Verbindung besteht/);
+    assert.equal((await state()).cards.find((c) => c.id === before.id).seen, before.seen, 'Server noch ohne Bewertung');
+    await page.unroute('**/api/state');
+    await page.reload(); await page.waitForSelector('#fc'); await settled();
+    const saved = (await state()).cards.find((c) => c.id === before.id);
+    assert.equal(saved.seen, before.seen + 1, 'Bewertung nachträglich gespeichert');
+    assert.equal(saved.last, todayIso);
   });
 
   // ---------- 10. Wiederöffnen ----------
@@ -380,7 +430,8 @@ try {
     assert.ok(btn.height >= 44, 'Tippfläche gross genug');
     await mp.screenshot({ path: path.join(SHOTS, 'mobil-karteikarte.png') });
     const content = db.contents.find((c) => c.type === 'quiz');
-    await mp.goto(`${BASE}/#/inhalt/${content.id}`); await mp.waitForSelector('.question');
+    await mp.goto(`${BASE}/#/inhalt/${content.id}`); await mp.waitForSelector('.question, #resume');
+    if (await mp.locator('#resume').count()) { await mp.tap('#resume'); await mp.waitForSelector('.question'); }
     assert.ok(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Quiz passt');
     await mp.screenshot({ path: path.join(SHOTS, 'mobil-quiz.png'), fullPage: true });
     await m.close();

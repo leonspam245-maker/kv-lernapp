@@ -68,6 +68,7 @@ strong { font-weight: 700; }
 .brand:hover { text-decoration: none; }
 .save-state { font-size: var(--t-xs); color: var(--muted); }
 .save-state[data-state="error"] { color: var(--bad); font-weight: 700; }
+.save-state[data-state="offline"] { color: var(--warn, #9a6200); font-weight: 700; }
 
 .nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: grid; grid-template-columns: repeat(6, 1fr); height: calc(var(--nav-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 1px solid var(--line); }

@@ -137,8 +137,8 @@ export function bindUnitChecks(root, after = rerender) {
     cb.addEventListener('change', async () => {
       const el = cb.closest('.unit');
       try {
-        await toggleUnit(el.dataset.exam, el.dataset.unit, cb.checked);
-        toast(cb.checked ? 'Einheit abgehakt und gespeichert.' : 'Einheit wieder geöffnet.');
+        const saved = await toggleUnit(el.dataset.exam, el.dataset.unit, cb.checked);
+        toast(cb.checked ? (saved ? 'Einheit abgehakt und gespeichert.' : 'Einheit abgehakt. Gespeichert wird, sobald wieder eine Verbindung besteht.') : 'Einheit wieder geöffnet.', saved ? undefined : 'info');
         after();
       } catch (e) { cb.checked = !cb.checked; toast(e.message, 'error'); }
     });
@@ -452,10 +452,11 @@ function sourceView(el, id, query) {
     await initBackend();
     const user = await currentUser();
     const start = async () => {
-      await loadAll();
-      // Angaben aus der Registrierung einmalig ins Profil übernehmen
+      // Konto zuerst bestimmen: noch nicht gespeicherter Lernfortschritt gehört zum jeweiligen Konto
       const u = await currentUser();
       store.user = u;
+      await loadAll();
+      // Angaben aus der Registrierung einmalig ins Profil übernehmen
       const meta = u?.user_metadata;
       if (meta?.firstName && !store.db.settings.profile) {
         await commit((d) => { d.settings.profile = { firstName: meta.firstName, apprenticeshipYear: meta.apprenticeshipYear || 1, school: meta.school || '' }; }).catch(() => {});

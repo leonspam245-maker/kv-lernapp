@@ -25,7 +25,7 @@ export function toast(message, type = 'success', opts = {}) {
 export function showSaveState(state) {
   const el = document.getElementById('save-state');
   if (!el) return;
-  const map = { saving: 'Speichert …', saved: 'Gespeichert', error: 'Nicht gespeichert' };
+  const map = { saving: 'Speichert …', saved: 'Gespeichert', error: 'Nicht gespeichert', offline: 'Offline – wird nachgeholt' };
   el.textContent = map[state] || '';
   el.dataset.state = state;
 }

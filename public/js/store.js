@@ -3,18 +3,20 @@ import { toast, showSaveState } from './ui.js';
 import { getState, putState, getVersion, getStatus } from './backend.js';
 // Schlägt das Speichern fehl, wird die Änderung zurückgenommen: Die Anzeige zeigt immer den gespeicherten Stand.
 
-export const store = { db: null, version: 0, server: { ocrAvailable: false, ai: { configured: false } } };
+export const store = { db: null, version: 0, user: null, server: { ocrAvailable: false, ai: { configured: false } } };
 
 export async function loadAll() {
   const [state, status] = await Promise.all([getState(), getStatus()]);
-  store.db = migrate(state.data);
+  store.db = applyPending(migrate(state.data));
   store.version = state.version;
   store.server = status;
+  if (outbox().length) flushProgress();
 }
 
 function migrate(data) {
   const d = data || {};
   for (const k of ['subjects', 'topics', 'sources', 'cards', 'contents', 'attempts', 'exams']) if (!Array.isArray(d[k])) d[k] = [];
+  if (!d.sessions || typeof d.sessions !== 'object' || Array.isArray(d.sessions)) d.sessions = {}; // angefangene Quiz und Prüfungen
   d.settings = { aiConsent: false, aiConsentAt: null, ...(d.settings || {}) };
   d.schema = 1;
   return d;
@@ -26,7 +28,7 @@ export const sync = { onExternalChange: null };
 
 async function fetchState() {
   const state = await getState();
-  return { data: migrate(state.data), version: state.version };
+  return { data: applyPending(migrate(state.data)), version: state.version };
 }
 
 /**
@@ -99,3 +101,81 @@ export const topicName = (id) => byId('topics', id)?.name || 'Ohne Thema';
 export const sourceTitle = (id) => byId('sources', id)?.title || 'Gelöschte Unterlage';
 export const topicsOf = (subjectId) => store.db.topics.filter((t) => t.subjectId === subjectId).sort((a, b) => a.name.localeCompare(b.name, 'de-CH'));
 export const sourcesOf = (topicId) => store.db.sources.filter((s) => s.topicId === topicId);
+
+// ---------- Lernfortschritt: wird immer gespeichert ----------
+// Fortschritt (Kartenbewertungen, Quiz- und Prüfungsergebnisse, angefangene Durchgänge, erledigte Einheiten)
+// wird sofort angezeigt und in einer Warteschlange im Browser festgehalten. Fehlt die Verbindung,
+// speichert die App automatisch nach, sobald sie wieder besteht – auch nach einem Neuladen.
+// Jeder Eintrag lässt sich mehrfach anwenden, ohne etwas doppelt zu zählen.
+const outboxKey = () => `kv-lernapp:fortschritt:${store.user?.id || 'lokal'}`;
+let memoryOutbox = [];
+function outbox() {
+  try { return JSON.parse(localStorage.getItem(outboxKey()) || '[]'); } catch { return memoryOutbox; }
+}
+function setOutbox(list) {
+  memoryOutbox = list;
+  try { if (list.length) localStorage.setItem(outboxKey(), JSON.stringify(list)); else localStorage.removeItem(outboxKey()); } catch { /* nur im Speicher */ }
+}
+
+export function applyOp(d, op) {
+  if (op.kind === 'card') {
+    const i = d.cards.findIndex((x) => x.id === op.cardId);
+    if (i >= 0) d.cards[i] = { ...d.cards[i], ...op.fields };
+  } else if (op.kind === 'attempt') {
+    const i = d.attempts.findIndex((x) => x.id === op.attempt.id);
+    if (i >= 0) d.attempts[i] = op.attempt; else d.attempts.push(op.attempt);
+  } else if (op.kind === 'session') {
+    if (op.value) d.sessions[op.contentId] = op.value; else delete d.sessions[op.contentId];
+  } else if (op.kind === 'unit') {
+    const u = d.exams.find((e) => e.id === op.examId)?.plan?.units.find((x) => x.id === op.unitId);
+    if (u) Object.assign(u, op.fields);
+  }
+}
+function applyPending(d) {
+  for (const op of outbox()) applyOp(d, op);
+  return d;
+}
+
+let flushTimer = null;
+let flushing = null;
+/** Noch nicht gespeicherte Fortschritts-Einträge (für Anzeige und Tests). */
+export const pendingProgress = () => outbox().length;
+
+export function flushProgress() {
+  if (flushing) return flushing;
+  const ops = outbox();
+  if (!ops.length) return Promise.resolve(true);
+  flushing = commit((d) => { for (const op of ops) applyOp(d, op); })
+    .then(() => {
+      const sent = new Set(ops.map((o) => o.oid));
+      setOutbox(outbox().filter((o) => !sent.has(o.oid)));
+      clearTimeout(flushTimer); flushTimer = null;
+      if (outbox().length) { flushing = null; return flushProgress(); }
+      return true;
+    })
+    .catch(() => {
+      showSaveState('offline');
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(flushProgress, 20000);
+      return false;
+    })
+    .finally(() => { flushing = null; });
+  return flushing;
+}
+
+/**
+ * Lernfortschritt festhalten. Die Änderung gilt sofort; gespeichert wird im Hintergrund.
+ * Liefert true, wenn bereits gespeichert, false, wenn das Speichern nachgeholt wird.
+ */
+export async function saveProgress(...ops) {
+  const stamped = ops.map((op) => ({ ...op, oid: Math.random().toString(36).slice(2) + Date.now().toString(36) }));
+  setOutbox([...outbox(), ...stamped]);
+  for (const op of stamped) applyOp(store.db, op);
+  await (flushing || Promise.resolve());
+  return flushProgress();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => flushProgress());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushProgress(); });
+}

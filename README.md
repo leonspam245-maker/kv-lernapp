@@ -54,6 +54,8 @@ Computer und Handy greifen auf dieselben Daten zu. Speichern beide Geräte kurz 
 - Konten stehen in `data/users.json`. Passwörter sind nur als scrypt-Hash gespeichert, nie im Klartext.
 - Daten aus der Zeit vor den Konten (`data/lernapp.json`) übernimmt automatisch das erste eingerichtete Konto. Die alte Datei bleibt als `data/lernapp.uebernommen.json` erhalten.
 - Material und Lernfortschritt bleiben nach einem Neustart erhalten.
+- Lernfortschritt wird sofort gespeichert: jede Kartenbewertung, jede beantwortete Quizfrage, Antworten in der Probeprüfung (laufend als Entwurf), Ergebnisse und abgehakte Einheiten. Ein abgebrochenes Quiz lässt sich fortsetzen.
+- Fehlt die Verbindung (z. B. im Zug), hält der Browser den Fortschritt fest und speichert ihn automatisch nach, sobald die Verbindung wieder besteht – auch nach einem Neuladen. Oben steht dann «Offline – wird nachgeholt».
 - Unter **Einstellungen** kannst du eine Sicherung herunterladen, eine Sicherung einspielen, Beispieldaten laden und Beispieldaten wieder entfernen.
 
 ## Importwege
