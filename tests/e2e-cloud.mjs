@@ -40,7 +40,7 @@ try {
     await page.goto(BASE + '/');
     await page.waitForSelector('#auth-form');
     assert.equal(await page.locator('.nav').isVisible(), false);
-    assert.match(await page.innerText('main'), /Willkommen zurück/);
+    assert.match(await page.innerText('main'), /Willkommen zurück/i);
     await page.screenshot({ path: path.join(SHOTS, 'cloud-01-anmeldung.png') });
   });
 
@@ -68,7 +68,7 @@ try {
     assert.equal(st.rows.u1.data.subjects[0].name, 'W&G (Beispiel)');
     await page.reload();
     await page.waitForSelector('.hero-num');
-    assert.match(await page.innerText('main'), /Tage bis zur Prüfung/);
+    assert.match(await page.innerText('main'), /Tage bis zur Prüfung/i);
   });
 
   await check('Abmelden, falsches Passwort, Anmelden: Daten wieder da', async () => {

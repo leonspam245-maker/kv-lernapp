@@ -286,14 +286,14 @@ try {
     const db = await state();
     const topic = db.topics.find((t) => t.name === 'Vertragsarten');
     await go(`#/karten?themen=${topic.id}`);
-    const firstTerm = await page.innerText('.face-front .term');
+    const firstTerm = await page.textContent('.face-front .term');
     await page.click('#fc');
     await page.waitForSelector('#rate:not([hidden])');
     await page.screenshot({ path: path.join(SHOTS, '10-karteikarte-rueckseite.png') });
     await page.click('[data-rate="0"]'); // Noch üben
     await page.waitForFunction((t) => document.querySelector('.face-front .term')?.textContent !== t, firstTerm);
     for (let i = 0; i < 3; i++) { await page.click('#fc'); await page.click('[data-rate="1"]'); await page.waitForTimeout(150); }
-    assert.equal(await page.innerText('.face-front .term'), firstTerm, '«Noch üben»-Karte kommt nach 3 Karten wieder');
+    assert.equal(await page.textContent('.face-front .term'), firstTerm, '«Noch üben»-Karte kommt nach 3 Karten wieder');
     const after = await state();
     const again = after.cards.find((c) => c.term === firstTerm);
     assert.equal(again.wrong, 1); assert.equal(again.box, 0);
