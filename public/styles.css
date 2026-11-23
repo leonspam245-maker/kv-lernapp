@@ -554,3 +554,13 @@ main > .route-wrap { background: var(--paper); border: var(--border); box-shadow
 .hero { margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); padding-left: 16px; padding-right: 16px; overflow: hidden; }
 .hero-bg { opacity: .55; top: 50%; }
 body { background-attachment: scroll, scroll; min-height: 100vh; }
+
+/* Schreibmaschinenschrift wie im Upwise-Entwurf (Courier Prime, SIL Open Font License, lokal eingebunden) */
+@font-face { font-family: "Courier Prime"; src: url("/fonts/courier-prime-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Courier Prime"; src: url("/fonts/courier-prime-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+:root { --mono: "Courier Prime", "Courier New", Courier, monospace; font-family: var(--mono); font-size: 16.5px; }
+body, button, input, select, textarea, .btn, .tabs button, .nav a, .toast { font-family: var(--mono); }
+.btn { letter-spacing: .02em; }
+.title, .def dt, .stop-day, .kind, label, th { font-family: var(--mono); font-weight: 700; }
+h1, h2, h3, .brand, .hero-num, .hero-text, .hero-title, .figure, .big-number, .face-front .term, .section-head h2 { font-family: var(--display); }
+.hero-sub, .hero-meta, .page-head p, .tile-lead { letter-spacing: -0.01em; }

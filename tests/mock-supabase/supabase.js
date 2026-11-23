@@ -10,18 +10,18 @@
   function createClient() {
     const auth = {
       async getSession() { await delay(); const db = load(); return { data: { session: db.session } }; },
-      async signUp({ email, password }) {
+      async signUp({ email, password, options }) {
         await delay(); const db = load();
         if (db.users.length) return { error: { message: 'Database error saving new user' } };
         if (password.length < 8) return { error: { message: 'Password should be at least 8 characters' } };
-        db.users.push({ id: 'u1', email, password }); save(db);
+        db.users.push({ id: 'u1', email, password, user_metadata: options?.data || {} }); save(db);
         return { data: { user: { id: 'u1', email } }, error: null };
       },
       async signInWithPassword({ email, password }) {
         await delay(); const db = load();
         const u = db.users.find((x) => x.email === email && x.password === password);
         if (!u) return { error: { message: 'Invalid login credentials' } };
-        db.session = { access_token: 'mock-token', user: { id: u.id, email } }; save(db);
+        db.session = { access_token: 'mock-token', user: { id: u.id, email, user_metadata: u.user_metadata || {} } }; save(db);
         return { data: { session: db.session }, error: null };
       },
       async signOut() { await delay(); const db = load(); db.session = null; save(db); return { error: null }; },

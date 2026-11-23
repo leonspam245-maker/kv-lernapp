@@ -41,8 +41,8 @@ export async function signIn(email, password) {
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw new Error(authError(error));
 }
-export async function signUp(email, password) {
-  const { error } = await sb.auth.signUp({ email, password });
+export async function signUp(email, password, profile = {}) {
+  const { error } = await sb.auth.signUp({ email, password, options: { data: profile } });
   // Das Konto wird serverseitig direkt bestätigt; danach gleich anmelden.
   // Auch bei einem Fehler (z. B. E-Mail-Versandgrenze) kann das Konto bereits bestehen: Anmeldung versuchen.
   try {

@@ -44,17 +44,41 @@ try {
     await page.screenshot({ path: path.join(SHOTS, 'cloud-01-anmeldung.png') });
   });
 
-  await check('Konto einrichten: Prüfung der Eingaben, dann direkt in der App', async () => {
+  await check('Konto einrichten: Vorname, Lehrjahr, Schule, Passwort zweimal, Zustimmung; dann direkt in der App mit Begrüssung', async () => {
     await page.click('#auth-switch');
+    assert.equal(await page.inputValue('#auth-school'), 'Wirtschaftsschule KV Chur');
+    await page.fill('#auth-name', 'Lea');
+    await page.selectOption('#auth-year', '2');
     await page.fill('#auth-email', 'lernende@example.ch');
     await page.fill('#auth-pw', 'kurz');
     await page.click('#auth-submit');
     assert.match(await page.innerText('.notice-bad'), /mindestens 8 Zeichen/);
-    assert.equal(await page.inputValue('#auth-email'), 'lernende@example.ch', 'E-Mail bleibt erhalten');
-    await page.fill('#auth-pw', 'sicheres-passwort');
+    assert.equal(await page.inputValue('#auth-name'), 'Lea', 'Eingaben bleiben erhalten');
+    await page.fill('#auth-pw', 'passwort-ohne-zahl');
+    await page.fill('#auth-pw2', 'passwort-ohne-zahl');
+    await page.click('#auth-submit');
+    assert.match(await page.innerText('.notice-bad'), /eine Zahl/);
+    await page.fill('#auth-pw', 'sicheres-passwort1');
+    await page.fill('#auth-pw2', 'anderes-passwort1');
+    await page.click('#auth-submit');
+    assert.match(await page.innerText('.notice-bad'), /stimmen nicht überein/);
+    await page.fill('#auth-pw', 'sicheres-passwort1');
+    await page.fill('#auth-pw2', 'sicheres-passwort1');
+    await page.check('#auth-show');
+    assert.equal(await page.getAttribute('#auth-pw', 'type'), 'text', 'Passwort anzeigen');
+    await page.click('#auth-submit');
+    assert.match(await page.innerText('.notice-bad'), /bestätige/);
+    await page.fill('#auth-pw', 'sicheres-passwort1');
+    await page.fill('#auth-pw2', 'sicheres-passwort1');
+    await page.check('#auth-consent');
+    await page.screenshot({ path: path.join(SHOTS, 'cloud-03-registrierung.png'), fullPage: true });
     await page.click('#auth-submit');
     await page.waitForSelector('.home-grid');
     assert.equal(await page.locator('.nav').isVisible(), true);
+    assert.match(await page.innerText('.hero-date'), /Hallo Lea\./);
+    const st = await mockState();
+    assert.deepEqual([st.users[0].user_metadata.firstName, st.users[0].user_metadata.apprenticeshipYear, st.users[0].user_metadata.school], ['Lea', 2, 'Wirtschaftsschule KV Chur']);
+    assert.equal(st.rows.u1.data.settings.profile.firstName, 'Lea', 'Profil gespeichert');
   });
 
   await check('Speichern in der Cloud und Wiederöffnen ohne erneute Anmeldung', async () => {
@@ -64,7 +88,7 @@ try {
     await page.click('#demo-add');
     await page.waitForSelector('.hero-num');
     const st = await mockState();
-    assert.equal(st.rows.u1.version, 1);
+    assert.equal(st.rows.u1.version, 2, 'Profil (1) und Beispieldaten (2) gespeichert');
     assert.equal(st.rows.u1.data.subjects[0].name, 'W&G (Beispiel)');
     await page.reload();
     await page.waitForSelector('.hero-num');
@@ -76,10 +100,10 @@ try {
     await page.click('#logout');
     await page.waitForSelector('#auth-form');
     await page.fill('#auth-email', 'lernende@example.ch');
-    await page.fill('#auth-pw', 'falsches-passwort');
+    await page.fill('#auth-pw', 'falsches-passwort1');
     await page.click('#auth-submit');
     assert.match(await page.innerText('.notice-bad'), /stimmt nicht/);
-    await page.fill('#auth-pw', 'sicheres-passwort');
+    await page.fill('#auth-pw', 'sicheres-passwort1');
     await page.click('#auth-submit');
     await page.waitForSelector('#demo-del'); // bleibt auf der zuletzt geöffneten Seite, Beispieldaten vorhanden
     await page.goto(BASE + '/'); await page.waitForSelector('.hero-num');
@@ -92,8 +116,11 @@ try {
     await p2.evaluate((s) => localStorage.setItem('mock-supabase', JSON.stringify({ ...s, session: null })), await mockState());
     await p2.reload(); await p2.waitForSelector('#auth-form');
     await p2.click('#auth-switch');
+    await p2.fill('#auth-name', 'Jemand');
     await p2.fill('#auth-email', 'jemand@example.ch');
-    await p2.fill('#auth-pw', 'anderes-passwort');
+    await p2.fill('#auth-pw', 'anderes-passwort1');
+    await p2.fill('#auth-pw2', 'anderes-passwort1');
+    await p2.check('#auth-consent');
     await p2.click('#auth-submit');
     assert.match(await p2.innerText('.notice-bad'), /bereits ein Konto/);
     await other.close();

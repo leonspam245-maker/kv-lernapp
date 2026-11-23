@@ -11,7 +11,17 @@ export function settingsView(el) {
   const ai = store.server.ai || {};
   const consent = db.settings.aiConsent;
   const demoCount = db.subjects.filter((s) => s.demo).length;
+  const pr = db.settings.profile || {};
   el.innerHTML = `<div class="page-head"><div><h1>Einstellungen</h1></div></div>
+  <section class="card">
+    <h2 style="margin-top:0">Profil</h2>
+    <form id="profile" class="grid grid-3" style="align-items:end" novalidate>
+      <div class="field"><label for="pf-name">Vorname</label><input type="text" id="pf-name" value="${esc(pr.firstName || '')}" autocomplete="given-name"></div>
+      <div class="field"><label for="pf-year">Lehrjahr</label><select id="pf-year">${[1, 2, 3].map((y) => `<option value="${y}" ${Number(pr.apprenticeshipYear || 1) === y ? 'selected' : ''}>${y}. Lehrjahr</option>`).join('')}</select></div>
+      <div class="field"><label for="pf-school">Berufsfachschule</label><input type="text" id="pf-school" value="${esc(pr.school ?? '')}" autocomplete="organization"></div>
+      <div><button class="btn btn-primary" id="pf-save">Profil speichern</button></div>
+    </form>
+  </section>
   <section class="card">
     <h2 style="margin-top:0">KI-Dienst für Lerninhalte (optional)</h2>
     <p>Die App funktioniert vollständig ohne KI: Import, Lernplan, Karteikarten, sowie Merkblatt, Quiz und Probeprüfung aus deinen Unterlagen werden lokal erstellt. Optional kann der KI-Dienst <strong>Claude von Anthropic</strong> verständlichere Merkblätter, abwechslungsreichere Fragen und gekennzeichnete eigene Beispiele erstellen.</p>
@@ -65,6 +75,15 @@ export function settingsView(el) {
     <div class="row">${demoCount ? '<button class="btn btn-danger" id="demo-del">Beispieldaten entfernen</button>' : '<button class="btn" id="demo-add">Beispieldaten laden</button>'}</div>
   </section>`;
 
+  el.querySelector('#profile').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const firstName = el.querySelector('#pf-name').value.trim();
+    if (!firstName) return toast('Bitte einen Vornamen eingeben.', 'error');
+    try {
+      await commit((d) => { d.settings.profile = { firstName, apprenticeshipYear: Number(el.querySelector('#pf-year').value), school: el.querySelector('#pf-school').value.trim() }; });
+      toast('Profil gespeichert.');
+    } catch (err) { toast(err.message, 'error'); }
+  });
   el.querySelector('#logout')?.addEventListener('click', async () => {
     try { await signOut(); location.reload(); } catch (e) { toast(e.message, 'error'); }
   });

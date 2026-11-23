@@ -146,6 +146,7 @@ export function bindUnitChecks(root, after = rerender) {
 }
 
 // ---------- Startseite ----------
+const greeting = () => (store.db.settings.profile?.firstName ? `Hallo ${esc(store.db.settings.profile.firstName)}. ` : '');
 function homeView(el) {
   const db = store.db;
   const t = today();
@@ -167,7 +168,7 @@ function homeView(el) {
     const done = all.filter((u) => u.done).length;
     hero = `<section class="hero" aria-labelledby="hero-title">
       <div class="hero-bg" aria-hidden="true">LERNEN</div>
-      <p class="hero-date">${fmtDateLong(t)}</p>
+      <p class="hero-date">${greeting()}${fmtDateLong(t)}</p>
       <h1 class="hero-count" id="hero-title"><span class="hero-num">${left}</span><span class="hero-text">${left === 1 ? 'Tag' : 'Tage'} bis zur Prüfung</span></h1>
       <p class="hero-sub">${esc(nextExam.title)} ${demoBadge(nextExam)}</p>
       <p class="hero-meta">${esc(subjectName(nextExam.subjectId))}, ${fmtDateLong(nextExam.date)}. ${done} von ${plural(all.length, 'Einheit', 'Einheiten')} erledigt.</p>
@@ -177,7 +178,7 @@ function homeView(el) {
   } else {
     hero = `<section class="hero hero-empty" aria-labelledby="hero-title">
       <div class="hero-bg" aria-hidden="true">LERNEN</div>
-      <p class="hero-date">${fmtDateLong(t)}</p>
+      <p class="hero-date">${greeting()}${fmtDateLong(t)}</p>
       <h1 class="hero-title" id="hero-title">Wann ist deine nächste Prüfung?</h1>
       <p class="hero-meta">Erfasse Datum, Themen und deine freie Zeit. Die App plant den Weg dorthin.</p>
       <div class="hero-ctas"><a class="btn btn-primary" href="#/pruefung/neu">Prüfung erfassen</a><a class="btn" href="#/import">Material importieren</a></div>
@@ -450,7 +451,16 @@ function sourceView(el, id, query) {
   try {
     await initBackend();
     const user = await currentUser();
-    const start = async () => { await loadAll(); route(); };
+    const start = async () => {
+      await loadAll();
+      // Angaben aus der Registrierung einmalig ins Profil übernehmen
+      const u = await currentUser();
+      const meta = u?.user_metadata;
+      if (meta?.firstName && !store.db.settings.profile) {
+        await commit((d) => { d.settings.profile = { firstName: meta.firstName, apprenticeshipYear: meta.apprenticeshipYear || 1, school: meta.school || '' }; }).catch(() => {});
+      }
+      route();
+    };
     if (!user) { loginView(view, start); return; }
     await start();
   } catch (e) {
