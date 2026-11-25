@@ -32,6 +32,15 @@
           : { data: { user: null }, error: { message: 'User from sub claim in JWT does not exist', status: 403 } };
       },
       async signOut() { await delay(); const db = load(); db.session = null; save(db); return { error: null }; },
+      // Passwort zurücksetzen: Anfrage wird nur festgehalten (der Test prüft sie), kein echter E-Mail-Versand
+      async resetPasswordForEmail(email, opts) { await delay(); const db = load(); (db.resets ||= []).push({ email, redirectTo: opts?.redirectTo }); save(db); return { data: {}, error: null }; },
+      async updateUser({ password }) {
+        await delay(); const db = load();
+        const u = db.session && db.users.find((x) => x.id === db.session.user.id);
+        if (!u) return { error: { message: 'Auth session missing!' } };
+        if (u.password === password) return { error: { message: 'New password should be different from the old password.' } };
+        u.password = password; save(db); return { data: { user: { id: u.id } }, error: null };
+      },
     };
     const uid = () => load().session?.user.id;
     return {

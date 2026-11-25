@@ -18,7 +18,41 @@ export async function initBackend() {
   try { cfg = await (await fetch('/config.json', { cache: 'no-store' })).json(); } catch { cfg = { mode: 'local' }; }
   if (!isCloud()) return;
   if (!window.supabase) await loadScript('/vendor/supabase/supabase.js');
-  sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  // Link aus der E-Mail «Passwort zurücksetzen»: Supabase hängt type=recovery (oder einen Fehler) an die Adresse
+  const hash = location.hash + location.search;
+  const recovery = /type=recovery/.test(hash);
+  const linkError = /error_code=|error=access_denied/.test(hash);
+  sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  if (recovery || linkError) {
+    await sb.auth.getSession(); // wartet, bis die Anmeldung aus dem Link übernommen ist
+    flags.recovery = recovery && !linkError;
+    flags.linkError = linkError ? 'Der Link ist abgelaufen oder wurde schon verwendet. Fordere unter «Passwort vergessen?» einen neuen an.' : '';
+    history.replaceState(null, '', location.pathname);
+  }
+}
+const flags = { recovery: false, linkError: '' };
+/** Wurde die App über den Link «Passwort zurücksetzen» geöffnet? */
+export const isRecovery = () => flags.recovery;
+export const recoveryLinkError = () => flags.linkError;
+
+/** E-Mail mit Link zum Zurücksetzen schicken (nur online). */
+export async function requestPasswordReset(email) {
+  if (!isCloud()) throw new Error('In der lokalen Version gibt es keinen E-Mail-Versand.');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/` });
+  if (error) {
+    if (/rate|limit|seconds/i.test(error.message)) throw new Error('Zu viele Anfragen. Bitte warte ein paar Minuten und versuche es erneut.');
+    throw new Error('Die E-Mail konnte nicht verschickt werden. Bitte später erneut versuchen.');
+  }
+}
+/** Neues Passwort für das angemeldete Konto setzen (nach dem Link aus der E-Mail). */
+export async function setNewPassword(password) {
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) {
+    if (/same|different/i.test(error.message)) throw new Error('Das neue Passwort muss sich vom bisherigen unterscheiden.');
+    if (/session|jwt|expired/i.test(error.message)) throw new Error('Der Link ist abgelaufen. Fordere unter «Passwort vergessen?» einen neuen an.');
+    throw new Error('Das Passwort konnte nicht geändert werden. Bitte erneut versuchen.');
+  }
+  flags.recovery = false;
 }
 
 // ---------- Anmeldung (nur online) ----------

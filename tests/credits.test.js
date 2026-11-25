@@ -34,7 +34,16 @@ globalThis.fetch = async (url, opts = {}) => {
     if (m[1] === 'ai_settle') { db.balance += db.holds[a.p_hold] - a.p_amount; delete db.holds[a.p_hold]; db.ledger.push(['usage', a.p_amount]); return json(200, db.balance); }
     if (m[1] === 'ai_topup') {
       if (db.ledger.some((l) => l[2] === a.p_session)) return json(200, db.balance);
-      db.balance += a.p_amount; db.ledger.push(['topup', a.p_amount, a.p_session]); return json(200, db.balance);
+      db.balance += a.p_amount; db.ledger.push(['topup', a.p_amount, a.p_session, a.p_payment_intent]); return json(200, db.balance);
+    }
+    if (m[1] === 'ai_payment_adjust') {
+      const top = db.ledger.find((l) => l[0] === 'topup' && l[3] === a.p_payment_intent);
+      if (!top) return json(200, null);
+      const done = db.ledger.filter((l) => l[0] === a.p_kind && l[3] === a.p_payment_intent).reduce((x, l) => x - l[1], 0);
+      const other = db.ledger.filter((l) => ['refund', 'dispute'].includes(l[0]) && l[0] !== a.p_kind && l[3] === a.p_payment_intent).reduce((x, l) => x - l[1], 0);
+      const target = Math.min(a.p_target, Math.max(top[1] - other, 0)); const delta = target - done;
+      if (delta) { db.ledger.push([a.p_kind, -delta, null, a.p_payment_intent]); db.balance -= delta; }
+      return json(200, db.balance);
     }
   }
   throw new Error('unerwarteter Aufruf ' + u);
@@ -134,4 +143,28 @@ test('Stripe-Bestätigung: gültige Signatur schreibt einmal gut, gefälschte wi
   res = await send(mismatch, stripe.webhooks.generateTestHeaderString({ payload: mismatch, secret: 'whsec_test_dummy' }));
   assert.equal(res.body.credited, false, 'Gutschrift nur in Höhe der Zahlung');
   assert.equal(db.balance, 2000);
+});
+
+test('Rückerstattung und angefochtene Zahlung: Guthaben wird abgezogen, nur einmal, gewonnene Anfechtung zurückgebucht', async () => {
+  const stripe = new Stripe('sk_test_dummy');
+  webhook.deps.stripe = () => stripe;
+  const post = async (event) => {
+    const body = JSON.stringify(event); const res = fakeRes();
+    const r = { method: 'POST', headers: { 'stripe-signature': stripe.webhooks.generateTestHeaderString({ payload: body, secret: 'whsec_test_dummy' }) }, async *[Symbol.asyncIterator]() { yield Buffer.from(body); } };
+    await webhook.default(r, res); return res;
+  };
+  db.balance = 0;
+  let res = await post({ id: 'e1', type: 'checkout.session.completed', data: { object: { id: 'cs_r1', payment_intent: 'pi_r1', payment_status: 'paid', currency: 'chf', amount_total: 1000, client_reference_id: 'user-1', metadata: { user_id: 'user-1', credit_rappen: '1000' } } } });
+  assert.equal(db.balance, 1000);
+  assert.equal(calls.at(-1)[1].p_payment_intent, 'pi_r1', 'Zahlung zur Aufladung gemerkt');
+  res = await post({ id: 'e2', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_r1', currency: 'chf', amount_refunded: 400 } } });
+  assert.equal(res.body.adjusted, true); assert.equal(db.balance, 600);
+  await post({ id: 'e2', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_r1', currency: 'chf', amount_refunded: 400 } } });
+  assert.equal(db.balance, 600, 'doppelte Meldung zieht nicht doppelt ab');
+  await post({ id: 'e3', type: 'charge.dispute.created', data: { object: { id: 'dp_1', payment_intent: 'pi_r1', currency: 'chf', amount: 1000, status: 'needs_response' } } });
+  assert.equal(db.balance, 0, 'Anfechtung zieht höchstens den Rest ab');
+  await post({ id: 'e4', type: 'charge.dispute.closed', data: { object: { id: 'dp_1', payment_intent: 'pi_r1', currency: 'chf', amount: 1000, status: 'won' } } });
+  assert.equal(db.balance, 600, 'gewonnene Anfechtung zurückgebucht');
+  res = await post({ id: 'e5', type: 'charge.refunded', data: { object: { id: 'ch_9', payment_intent: 'pi_fremd', currency: 'chf', amount_refunded: 500 } } });
+  assert.equal(res.body.adjusted, false, 'fremde Zahlung ignoriert'); assert.equal(db.balance, 600);
 });

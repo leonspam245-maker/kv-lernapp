@@ -4,6 +4,8 @@ KV-Learn (kv-learn.app) ist eine Lern-App für die KV-Lehre: Unterlagen pro Fach
 
 ## Online nutzen (empfohlen)
 
+**Passwort vergessen:** funktioniert nur mit eigenem E-Mail-Versand. In Supabase unter Authentication → Emails → SMTP Settings einen SMTP-Dienst eintragen (der eingebaute Versand erreicht nur Mitglieder des Supabase-Teams) und unter Authentication → URL Configuration die Site URL `https://kv-learn.app` sowie die Redirect URLs `https://kv-learn.app/**` und `https://kv-lernapp.vercel.app/**` setzen. Neue Passwörter werden über «Have I Been Pwned» auf bekannte Datenlecks geprüft (k-Anonymität: nur 5 Zeichen einer Prüfsumme werden übertragen).
+
 Adresse: **https://kv-learn.app** (die alte Adresse https://kv-lernapp.vercel.app funktioniert weiterhin).
 
 KV-Learn läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentrum Zürich). Du meldest dich mit E-Mail und Passwort an und kannst die App auf Handy und Computer als App installieren:
@@ -91,7 +93,7 @@ Einrichtung bei Vercel (Settings → Environment Variables, Typ «Sensitive», d
 | `CREDITS_SERVER_SECRET` | bereits eingerichtet (Hash in Supabase) |
 | optional `AI_MARKUP`, `USD_CHF`, `CLAUDE_PRICE_IN/OUT`, `OPENAI_PRICE_IN/OUT` | Faktor (Standard 3), Kurs (0.85) und Anbieterpreise in USD pro Million Tokens |
 
-Bei Stripe unter Developers → Webhooks einen Endpunkt `https://kv-learn.app/api/stripe/webhook` mit den Ereignissen `checkout.session.completed` und `checkout.session.async_payment_succeeded` anlegen. Erst wenn alle drei Stripe-/Kennwort-Variablen gesetzt sind, zeigt die App das Guthaben an.
+Bei Stripe unter Developers → Webhooks einen Endpunkt `https://kv-learn.app/api/stripe/webhook` mit den Ereignissen `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `charge.dispute.created` und `charge.dispute.closed` anlegen. Rückerstattungen und angefochtene Zahlungen werden damit automatisch vom Guthaben abgezogen (gewonnene Anfechtungen zurückgebucht). Erst wenn alle drei Stripe-/Kennwort-Variablen gesetzt sind, zeigt die App das Guthaben an.
 
 ### Offene Antworten mit KI bewerten
 

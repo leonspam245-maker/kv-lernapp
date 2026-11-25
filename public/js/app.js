@@ -8,8 +8,8 @@ import { importView } from './import.js';
 import { practiceView, contentView, cardsView } from './practice.js';
 import { planListView, examFormView, examPlanView, toggleUnit, unitStartLink, routeHtml } from './plan.js';
 import { settingsView } from './settings.js';
-import { initBackend, currentUser, isCloud } from './backend.js';
-import { loginView } from './auth.js';
+import { initBackend, currentUser, isCloud, isRecovery, recoveryLinkError } from './backend.js';
+import { loginView, newPasswordView } from './auth.js';
 
 const view = document.getElementById('view');
 export const today = () => todayISO();
@@ -475,7 +475,8 @@ function sourceView(el, id, query) {
         } else toast('Zahlung abgebrochen. Es wurde nichts belastet.', 'info');
       }
     };
-    if (!user) { loginView(view, start); return; }
+    if (user && isRecovery()) { newPasswordView(view, async () => { await start(); toast('Neues Passwort gespeichert.'); }); return; }
+    if (!user) { loginView(view, start, recoveryLinkError()); return; }
     await start();
   } catch (e) {
     view.innerHTML = `<div class="notice notice-bad"><h4>KV-Learn konnte nicht starten.</h4><p>${esc(e.message)}</p><p>${isCloud() ? 'Prüfe deine Internetverbindung' : 'Prüfe, ob der Server läuft (Befehl <code>npm start</code>)'} und lade die Seite neu.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`;

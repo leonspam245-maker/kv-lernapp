@@ -225,13 +225,14 @@ export function settingsView(el) {
   });
 }
 
-const KIND = { topup: 'Aufgeladen', usage: 'KI-Erstellung', cancelled: 'Storniert (Fehler, nicht belastet)', correction: 'Korrektur' };
+const KIND = { topup: 'Aufgeladen', usage: 'KI-Erstellung', cancelled: 'Storniert (Fehler, nicht belastet)', correction: 'Korrektur', refund: 'Rückerstattung', dispute: 'Zahlung angefochten' };
 async function loadCredits(el) {
   const out = el.querySelector('#credit-balance');
   try {
     const c = await getCredits();
     if (!out.isConnected) return;
     out.textContent = chf(c.balance);
+    if (c.balance < 0) out.insertAdjacentHTML('afterend', '<p class="small" style="margin:6px 0 0">Das Guthaben ist nach einer Rückerstattung im Minus. KI-Erstellungen sind wieder möglich, sobald es aufgeladen ist.</p>');
     el.querySelector('#credit-ledger').innerHTML = c.ledger.length
       ? `<h3>Letzte Buchungen</h3><div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th style="text-align:right">Betrag</th></tr></thead><tbody>${c.ledger.map((l) => `<tr><td>${fmtDateTime(l.created_at)}</td><td>${KIND[l.kind] || l.kind}${l.model ? ` <span class="small muted">${esc(l.model)}</span>` : ''}</td><td style="text-align:right">${l.amount_rappen > 0 ? '+' : ''}${chf(l.amount_rappen)}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="small muted">Noch keine Buchungen.</p>';
