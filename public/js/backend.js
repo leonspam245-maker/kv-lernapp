@@ -191,3 +191,66 @@ export async function getStatus() {
   } catch { /* offline */ }
   return { ocrAvailable: true, ai: { configured: false } };
 }
+
+// ---------- Gemeinsame Ablage (nur online) ----------
+// Dateien liegen im privaten Speicher «ablage»; Zugriff nur für angemeldete Personen über kurzlebige Links.
+const BUCKET = 'ablage';
+const libError = (msg) => { const e = new Error(msg); e.userFacing = true; return e; };
+const safeFileName = (name) => name.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(-80) || 'datei';
+
+/** Alle sichtbaren Einträge der Ablage (neueste zuerst). */
+export async function listLibrary() {
+  if (!isCloud()) return [];
+  const { data, error } = await sb.from('library_items')
+    .select('id, folder, title, description, file_path, file_name, mime, size_bytes, uploader_id, uploader_name, hidden, report_count, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw libError('Die Ablage konnte nicht geladen werden.');
+  return data || [];
+}
+/** Ist das angemeldete Konto Administrator der Ablage? */
+export async function isLibraryAdmin() {
+  if (!isCloud()) return false;
+  const { data, error } = await sb.rpc('is_admin');
+  return !error && data === true;
+}
+/** Datei hochladen und Eintrag anlegen. Schlägt der Eintrag fehl, wird die Datei wieder entfernt. */
+export async function uploadLibraryItem({ folder, title, description, file }) {
+  const { data: { session } } = await sb.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw libError('Bitte melde dich erneut an.');
+  const path = `${userId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+  const up = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+  if (up.error) throw libError(/size|large|exceed/i.test(up.error.message || '') ? 'Die Datei ist grösser als 20 MB.' : /mime|type/i.test(up.error.message || '') ? 'Dieses Dateiformat ist in der Ablage nicht erlaubt.' : 'Die Datei konnte nicht hochgeladen werden.');
+  const { data, error } = await sb.from('library_items').insert({
+    folder, title, description: description || null, file_path: path, file_name: file.name, mime: file.type, size_bytes: file.size, rights_confirmed_at: new Date().toISOString(),
+  }).select().single();
+  if (error) { await sb.storage.from(BUCKET).remove([path]); throw libError('Der Eintrag konnte nicht gespeichert werden.'); }
+  return data;
+}
+/** Kurzlebiger Link zum Öffnen oder Herunterladen (2 Minuten gültig). */
+export async function libraryFileUrl(item, download = false) {
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(item.file_path, 120, download ? { download: item.file_name } : undefined);
+  if (error || !data?.signedUrl) throw libError('Die Datei konnte nicht geöffnet werden.');
+  return data.signedUrl;
+}
+/** Datei als File-Objekt laden (für die Übernahme in die eigenen Unterlagen). */
+export async function libraryFile(item) {
+  const { data, error } = await sb.storage.from(BUCKET).download(item.file_path);
+  if (error || !data) throw libError('Die Datei konnte nicht geladen werden.');
+  return new File([data], item.file_name, { type: item.mime });
+}
+export async function reportLibraryItem(id, reason) {
+  const { error } = await sb.from('library_reports').insert({ item_id: id, reason });
+  if (error) throw libError(error.code === '23505' ? 'Du hast diesen Eintrag bereits gemeldet.' : 'Die Meldung konnte nicht gesendet werden.');
+}
+export async function deleteLibraryItem(item) {
+  // Zuerst die Datei: Der Speicher gibt sie nur frei, solange der Eintrag noch existiert
+  const rm = await sb.storage.from(BUCKET).remove([item.file_path]);
+  if (rm.error) throw libError('Die Datei konnte nicht gelöscht werden.');
+  const { error } = await sb.from('library_items').delete().eq('id', item.id);
+  if (error) throw libError('Der Eintrag konnte nicht gelöscht werden.');
+}
+export async function setLibraryHidden(id, hidden) {
+  const { error } = await sb.from('library_items').update({ hidden }).eq('id', id);
+  if (error) throw libError('Der Eintrag konnte nicht geändert werden.');
+}

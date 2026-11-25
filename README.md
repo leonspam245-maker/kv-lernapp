@@ -101,6 +101,17 @@ Ist der KI-Dienst aktiviert, bewertet er offene Antworten in Quiz und Probeprüf
 
 Übertragen werden nur die ausgewählten Unterlagen, und erst nach einer Bestätigung pro Erstellung.
 
+## Gemeinsame Ablage (nur online)
+
+Unter **Ablage** teilen angemeldete Lernende Dateien mit allen anderen: PDF, Word, PowerPoint, Excel, Text und Bilder bis 20 MB.
+
+- Feste Ordner: 1. bis 3. Lehrjahr, darin HKB a–e (Bildungsplan Kauffrau/Kaufmann EFZ 2023), Wahlpflichtbereich, üK und Allgemeines. Im 3. Lehrjahr gibt es zusätzlich den Ordner QV.
+- Beim Hochladen muss bestätigt werden, dass die Datei geteilt werden darf. Die Bestätigung wird mit Zeitpunkt gespeichert.
+- Dateien liegen im privaten Supabase-Speicher `ablage`. Geöffnet werden sie nur über Links, die 2 Minuten gültig sind, und nur von angemeldeten Personen.
+- Fremde Einträge können gemeldet werden. Ab zwei Meldungen wird ein Eintrag automatisch ausgeblendet.
+- Administratoren (Tabelle `private.admins`) können Einträge ein- und ausblenden sowie löschen.
+- PDF-, Word- und Textdateien lassen sich mit «In meine Unterlagen» direkt in den Import übernehmen.
+
 ## Tests
 
 ```bash

@@ -32,13 +32,30 @@ function saveDraft() {
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch { /* egal */ } }
 const hasInput = () => st && (st.pdf.files.length || st.mykv.text.trim() || st.mykv.files.length || st.quizlet.raw.trim() || st.onenote.md.trim() || st.onenote.files.length);
 
+let pendingFile = null;
+/** Datei aus der gemeinsamen Ablage an den Import übergeben (wird beim nächsten Öffnen eingelesen). */
+export function importFromLibrary(file) { pendingFile = file; }
+
 export function importView(el, _id, query) {
   if (!st) st = loadDraft();
+  const pending = pendingFile; pendingFile = null;
+  if (pending) {
+    if (/\.pdf$/i.test(pending.name)) st.tab = 'pdf';
+    else { st.tab = 'mykv'; st.mykv.mode = 'file'; st.mykv.kind = 'unterlage'; }
+  }
   if (query.fach && byId('subjects', query.fach)) { st.subjectId = query.fach; if (!query.thema) st.topicId = ''; }
   if (query.thema && byId('topics', query.thema)) st.topicId = query.thema;
   if (query.art && TABS.some(([k]) => k === query.art)) st.tab = query.art;
   setLeaveGuard(() => Boolean(hasInput()));
   render(el);
+  if (pending) {
+    // Datei wie eine ausgewählte Datei an die Ablagefläche übergeben
+    const input = el.querySelector(st.tab === 'pdf' ? '#dz-pdf input[type=file]' : '#dz-mykv input[type=file]');
+    const dt = new DataTransfer(); dt.items.add(pending);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change'));
+    toast(`«${pending.name}» aus der Ablage übernommen. Wähle Fach und Thema und prüfe den Inhalt.`, 'info');
+  }
 }
 
 function render(el) {

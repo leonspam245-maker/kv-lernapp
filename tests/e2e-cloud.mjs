@@ -269,6 +269,123 @@ try {
     await c.close();
   });
 
+  await check('Gemeinsame Ablage: Ordner nach Lehrjahr und HKB, hochladen mit Rechtebestätigung, für andere sichtbar, öffnen, übernehmen, melden, Admin', async () => {
+    // Lea (2. Lehrjahr) lädt eine eigene Zusammenfassung hoch
+    await page.goto(BASE + '/#/ablage');
+    await page.waitForSelector('.ablage-year');
+    assert.equal(await page.locator('.ablage-year').count(), 3);
+    assert.match(await page.locator('.ablage-year.is-mine').innerText(), /2\. Lehrjahr[\s\S]*Dein Lehrjahr/);
+    assert.match(await page.locator('.ablage-year').nth(0).innerText(), /HKB a[\s\S]*HKB e[\s\S]*Wahlpflichtbereich[\s\S]*üK/);
+    assert.doesNotMatch(await page.locator('.ablage-year').nth(0).innerText(), /Qualifikationsverfahren/);
+    assert.match(await page.locator('.ablage-year').nth(2).innerText(), /Qualifikationsverfahren/);
+    assert.equal(await page.locator('.nav a[data-nav=ablage]').getAttribute('class'), 'active');
+    await assertReadable(page, 'Ablage Übersicht');
+    await page.screenshot({ path: path.join(SHOTS, 'cloud-ablage-1-uebersicht.png'), fullPage: true });
+    await page.click('a[href="#/ablage/lj2/hkb-d"]');
+    await page.waitForSelector('#lib-add');
+    assert.match(await page.textContent('h1'), /HKB d/);
+    assert.match(await page.innerText('main'), /Noch leer/);
+    await page.click('#lib-add');
+    assert.equal(await page.inputValue('#lib-folder'), 'lj2/hkb-d', 'aktueller Ordner vorausgewählt');
+    await page.setInputFiles('#lib-file', { name: 'programm.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('MZ') });
+    await page.click('#lib-send');
+    assert.match(await page.innerText('#lib-error'), /Format ist nicht erlaubt/);
+    await page.setInputFiles('#lib-file', path.join(ROOT, 'samples', 'beispiel-handout-vertragsrecht.pdf'));
+    assert.equal(await page.inputValue('#lib-title'), 'beispiel handout vertragsrecht', 'Titel aus Dateiname');
+    await page.fill('#lib-title', 'Zusammenfassung Vertragsrecht');
+    await page.fill('#lib-desc', 'Antrag, Annahme und Fristen – selbst erstellt.');
+    await page.click('#lib-send');
+    assert.match(await page.innerText('#lib-error'), /bestätige, dass du diese Datei teilen darfst/);
+    await assertReadable(page, 'Ablage Hochladen');
+    assert.match(await page.innerText('#lib-fname'), /beispiel-handout-vertragsrecht\.pdf \(\d+ KB\)/);
+    await page.screenshot({ path: path.join(SHOTS, 'cloud-ablage-2-hochladen.png'), fullPage: true });
+    await page.check('#lib-rights');
+    await page.click('#lib-send');
+    await page.waitForSelector('.ablage-items li');
+    const row = await page.innerText('.ablage-items li');
+    assert.match(row, /Zusammenfassung Vertragsrecht[\s\S]*selbst erstellt[\s\S]*PDF · \d+ KB · von Lea \(du\)/);
+    assert.equal(await page.locator('.ablage-items [data-act=report]').count(), 0, 'eigene Einträge nicht meldbar');
+    assert.equal(await page.locator('.ablage-items [data-act=delete]').count(), 1, 'eigene Einträge löschbar');
+    const stored = await mockState();
+    assert.equal(stored.items.length, 1);
+    assert.match(stored.items[0].file_path, new RegExp(`^${stored.session.user.id}/`), 'Datei im eigenen Ordner');
+    assert.ok(stored.items[0].rights_confirmed_at, 'Rechtebestätigung gespeichert');
+    await assertReadable(page, 'Ablage Ordner');
+
+    // Mia (anderes Konto) sieht die Datei, öffnet sie, übernimmt sie und meldet sie
+    const all = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith('mock-')).map((k) => [k, localStorage.getItem(k)])));
+    const c2 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const p2 = await c2.newPage();
+    p2.on('pageerror', (e) => errors.push(e.message));
+    await p2.goto(BASE + '/');
+    await p2.evaluate((ls) => { for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v); const s = JSON.parse(ls['mock-supabase']); s.session = null; localStorage.setItem('mock-supabase', JSON.stringify(s)); }, all);
+    await p2.reload(); await p2.waitForSelector('#auth-form');
+    await p2.click('#auth-switch');
+    await p2.fill('#auth-name', 'Mia'); await p2.selectOption('#auth-year', '1');
+    await p2.fill('#auth-email', 'mia@example.ch');
+    await p2.fill('#auth-pw', 'mia-passwort-77'); await p2.fill('#auth-pw2', 'mia-passwort-77');
+    await p2.check('#auth-consent'); await p2.click('#auth-submit');
+    await p2.waitForSelector('.home-grid');
+    await p2.goto(BASE + '/#/ablage'); await p2.waitForSelector('.ablage-year');
+    assert.match(await p2.locator('.ablage-year.is-mine').innerText(), /1\. Lehrjahr/);
+    assert.match(await p2.locator('.ablage-year').nth(1).innerText(), /1 Datei/);
+    await p2.fill('#lib-q', 'vertragsrecht');
+    await p2.waitForSelector('#lib-results .ablage-items li');
+    assert.match(await p2.innerText('#lib-results'), /1 Treffer[\s\S]*2\. Lehrjahr · HKB d[\s\S]*von Lea/);
+    await p2.fill('#lib-q', 'gibtsnicht');
+    assert.match(await p2.innerText('#lib-results'), /Nichts gefunden/);
+    await p2.goto(BASE + '/#/ablage/lj2/hkb-d'); await p2.waitForSelector('.ablage-items li');
+    assert.equal(await p2.locator('[data-act=delete]').count(), 0, 'fremde Einträge nicht löschbar');
+    // Öffnen: neues Fenster erhält einen kurzlebigen Link (PDF-Anzeige gibt es im Testbrowser nicht, daher Fenster nachgebildet)
+    await p2.evaluate(() => { window.__opened = []; window.open = () => { const loc = {}; Object.defineProperty(loc, 'href', { set: (v) => window.__opened.push(v) }); return { opener: 1, close() {}, location: loc }; }; });
+    await p2.click('[data-act=open]');
+    await p2.waitForFunction(() => window.__opened.length === 1);
+    const blob = await p2.evaluate(async () => { const r = await fetch(window.__opened[0]); return { type: r.headers.get('content-type') || (await r.blob()).type, size: (await r.clone().arrayBuffer()).byteLength }; });
+    assert.ok(blob.size > 1000, 'Datei ist abrufbar');
+    await p2.click('[data-act=report]');
+    await p2.check('input[name=reason] >> nth=0');
+    await p2.fill('.ablage-report-form input[name=note]', 'Test');
+    await p2.click('.ablage-report-form .btn-primary');
+    await p2.waitForSelector('text=Danke, die Meldung ist eingegangen.');
+    await p2.click('[data-act=report]'); await p2.click('[data-act=report]');
+    await p2.click('.ablage-report-form .btn-primary');
+    await p2.waitForSelector('.toast:has-text("bereits gemeldet")');
+    assert.equal((await mockState(p2)).reports.length, 1);
+    await p2.click('[data-act=import]');
+    await p2.waitForURL(/#\/import$/);
+    await p2.waitForSelector('[data-page-text="0:0"]');
+    assert.match(await p2.inputValue('[data-page-text="0:0"]'), /Antrag/, 'PDF aus der Ablage im Import eingelesen');
+    assert.equal(await p2.getAttribute('[data-tab=pdf]', 'aria-selected'), 'true');
+
+    // Betreiber (Admin) kann ausblenden und löschen
+    await p2.evaluate(() => { const s = JSON.parse(localStorage.getItem('mock-supabase')); s.admin = s.session.user.id; localStorage.setItem('mock-supabase', JSON.stringify(s)); });
+    p2.once('dialog', () => {});
+    await p2.goto(BASE + '/#/ablage/lj2/hkb-d'); await p2.reload(); await p2.waitForSelector('.ablage-items li');
+    assert.match(await p2.innerText('.ablage-items li'), /1 Meldung/);
+    await p2.click('[data-act=hide]');
+    await p2.waitForSelector('.badge-warn:has-text("Ausgeblendet")');
+    await assertReadable(p2, 'Ablage Admin');
+    await p2.click('[data-act=delete]');
+    await p2.click('dialog [value=yes]');
+    await p2.waitForSelector('text=Noch leer');
+    const end = await mockState(p2);
+    assert.equal(end.items.length, 0);
+    assert.equal(await p2.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('mock-file:')).length), 0, 'Datei mitgelöscht');
+    await c2.close();
+    // Handy: Ablage mit Eintrag passt ohne seitliches Scrollen, Navigation mit sieben Punkten bleibt lesbar
+    const m = await browser.newContext({ ...devices['iPhone 13'] });
+    const mp = await m.newPage();
+    await mp.goto(BASE + '/');
+    await mp.evaluate((ls) => { for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v); }, all);
+    await mp.goto(BASE + '/#/ablage/lj2/hkb-d'); await mp.reload(); await mp.waitForSelector('.ablage-items li');
+    assert.ok(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'kein seitliches Scrollen');
+    const cut = await mp.evaluate(() => [...document.querySelectorAll('.nav a span')].filter((s) => s.offsetParent && s.scrollWidth > s.clientWidth + 1).map((s) => s.textContent));
+    assert.deepEqual(cut, [], 'Navigationstexte nicht abgeschnitten');
+    await assertReadable(mp, 'Ablage Handy');
+    await mp.screenshot({ path: path.join(SHOTS, 'cloud-ablage-3-handy.png'), fullPage: true });
+    await m.close();
+  });
+
   await check('Installierbar: Manifest, Symbole und Service Worker', async () => {
     const man = await (await fetch(BASE + '/manifest.webmanifest')).json();
     assert.equal(man.display, 'standalone');

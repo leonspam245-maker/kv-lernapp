@@ -1,5 +1,5 @@
 // Nachgebautes Supabase für automatische Tests (nur mit MOCK_SUPABASE=1 aktiv).
-// Bildet nur das nach, was die Lernapp nutzt: Anmeldung, Tabelle app_state und die Funktion save_state.
+// Bildet nur das nach, was die Lernapp nutzt: Anmeldung, app_state/save_state, KI-Guthaben und die gemeinsame Ablage.
 // Speichert im localStorage des Test-Browsers; verhält sich wie die echte Datenbank (ein Konto, Versionsprüfung).
 (function () {
   const KEY = 'mock-supabase';
@@ -43,6 +43,85 @@
       },
     };
     const uid = () => load().session?.user.id;
+    // ---------- Gemeinsame Ablage (wie Row Level Security der echten Datenbank) ----------
+    const isAdmin = (db) => db.admin === uid();
+    const visible = (db, i) => !i.hidden || i.uploader_id === uid() || isAdmin(db);
+    const err = (message, code) => ({ data: null, error: { message, code } });
+    function library(table) {
+      if (table === 'library_reports') return {
+        async insert({ item_id, reason }) {
+          await delay(); const db = load(); const me = uid();
+          if (!me) return err('nicht angemeldet', '42501');
+          const reps = (db.reports ||= []);
+          if (reps.some((r) => r.item_id === item_id && r.reporter_id === me)) return err('duplicate key', '23505');
+          reps.push({ item_id, reporter_id: me, reason });
+          const item = db.items.find((i) => i.id === item_id);
+          item.report_count = reps.filter((r) => r.item_id === item_id).length;
+          item.hidden = item.hidden || item.report_count >= 2;
+          save(db); return { data: null, error: null };
+        },
+      };
+      let filterId = null; let op = 'select'; let patch = null;
+      const q = {
+        select() { return q; }, order() { return q; },
+        eq(_col, v) { filterId = v; return q; },
+        delete() { op = 'delete'; return q; },
+        update(p) { op = 'update'; patch = p; return q; },
+        insert(row) {
+          op = 'insert'; patch = row; return q;
+        },
+        async single() { return q.run(); },
+        async run() {
+          await delay(); const db = load(); const me = uid(); db.items ||= [];
+          if (!me) return err('nicht angemeldet', '42501');
+          if (op === 'insert') {
+            const r = patch;
+            if (!/^lj[123]\/[a-z0-9-]{1,40}$/.test(r.folder) || r.file_path.split('/')[0] !== me || !r.rights_confirmed_at) return err('new row violates row-level security policy', '42501');
+            const u = db.users.find((x) => x.id === me);
+            const item = { ...r, id: 'it' + (db.items.length + 1), uploader_id: me, uploader_name: u?.user_metadata?.firstName || 'Anonym', hidden: false, report_count: 0, created_at: new Date().toISOString() };
+            db.items.push(item); save(db); return { data: item, error: null };
+          }
+          const item = db.items.find((i) => i.id === filterId);
+          if (op === 'delete') {
+            if (item && (item.uploader_id === me || isAdmin(db))) { db.items = db.items.filter((i) => i !== item); save(db); }
+            return { data: null, error: null };
+          }
+          if (op === 'update') {
+            if (item && isAdmin(db)) { Object.assign(item, patch); save(db); }
+            return { data: null, error: null };
+          }
+          return { data: db.items.filter((i) => visible(db, i)).slice().reverse(), error: null };
+        },
+        then(resolve, reject) { q.run().then(resolve, reject); },
+      };
+      return q;
+    }
+    const fileKey = (p) => 'mock-file:' + p;
+    const storage = {
+      async upload(path, file) {
+        await delay();
+        if (path.split('/')[0] !== uid()) return err('new row violates row-level security policy', '42501');
+        if (file.size > 20 * 1024 * 1024) return err('The object exceeded the maximum allowed size', '413');
+        const data = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+        localStorage.setItem(fileKey(path), data); return { data: { path }, error: null };
+      },
+      async createSignedUrl(path) {
+        await delay(); const db = load();
+        if (!(db.items || []).some((i) => i.file_path === path && visible(db, i))) return err('Object not found', '404');
+        const blob = await (await fetch(localStorage.getItem(fileKey(path)))).blob();
+        return { data: { signedUrl: URL.createObjectURL(blob) }, error: null };
+      },
+      async download(path) {
+        await delay(); const db = load();
+        if (!(db.items || []).some((i) => i.file_path === path && visible(db, i))) return err('Object not found', '404');
+        return { data: await (await fetch(localStorage.getItem(fileKey(path)))).blob(), error: null };
+      },
+      async remove(paths) {
+        await delay(); const db = load();
+        for (const p of paths) if (p.split('/')[0] === uid() || isAdmin(db)) localStorage.removeItem(fileKey(p));
+        return { data: [], error: null };
+      },
+    };
     return {
       auth,
       from(table) {
@@ -54,6 +133,7 @@
             then(resolve) { delay().then(() => resolve({ data: uid() ? [...credit().ledger].reverse() : [], error: null })); } };
           return q;
         }
+        if (table === 'library_items' || table === 'library_reports') return library(table);
         if (table !== 'app_state') throw new Error('unbekannte Tabelle');
         return {
           select(cols) {
@@ -69,8 +149,11 @@
           },
         };
       },
-      async rpc(name, { base_version, new_data }) {
+      storage: { from: () => storage },
+      async rpc(name, args = {}) {
         await delay();
+        if (name === 'is_admin') return { data: Boolean(uid()) && load().admin === uid(), error: null };
+        const { base_version, new_data } = args;
         const id = uid();
         if (!id) return { data: null, error: { message: 'Nicht angemeldet', code: '28000' } };
         const db = load();

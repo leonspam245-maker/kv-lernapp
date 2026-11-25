@@ -22,7 +22,7 @@
     <p><a href="/">← Zu KV-Learn</a></p>
     <h1 class="hero-title" style="margin:8px 0 20px">Rechtliches</h1>
     <div class="notice notice-warn" id="draft-note">Entwurf: Die gelb markierten Angaben fehlen noch. Vor dem Annehmen echter Zahlungen ergänzen.</div>
-    <p class="toc"><a href="#impressum">Impressum</a><a href="#bedingungen">Bedingungen KI-Guthaben</a><a href="#datenschutz">Datenschutz</a></p>
+    <p class="toc"><a href="#impressum">Impressum</a><a href="#bedingungen">Bedingungen KI-Guthaben</a><a href="#ablage">Regeln der Ablage</a><a href="#datenschutz">Datenschutz</a></p>
 
     <section class="card" id="impressum">
       <h2>Impressum</h2>
@@ -53,6 +53,19 @@
       <p>Es gilt schweizerisches Recht. Zwingende Bestimmungen zum Schutz von Konsumentinnen und Konsumenten, namentlich zum Gerichtsstand an deren Wohnsitz, bleiben vorbehalten.</p>
     </section>
 
+    <section class="card" id="ablage">
+      <h2>Regeln der gemeinsamen Ablage</h2>
+      <p class="small muted">Stand: 25.11.2026</p>
+      <p>In der Ablage können angemeldete Personen Dateien (z. B. eigene Zusammenfassungen und Handouts) für alle anderen angemeldeten Personen von KV-Learn bereitstellen. Die Dateien sind nicht öffentlich im Internet abrufbar.</p>
+      <ul>
+        <li>Wer eine Datei hochlädt, bestätigt, dass sie oder er sie teilen darf: Die Datei ist selbst erstellt, oder die Rechteinhaber erlauben die Weitergabe. Für die hochgeladenen Inhalte ist die hochladende Person verantwortlich.</li>
+        <li>Lehrmittel von Verlagen sowie Inhalte aus myKV oder von Lehrpersonen sind urheberrechtlich geschützt und dürfen nur mit ausdrücklicher Erlaubnis geteilt werden. Persönliche Lizenzen (z. B. für myKV) erlauben in der Regel keine Weitergabe.</li>
+        <li>Nicht erlaubt sind persönliche Daten anderer Personen, Prüfungen, die noch geschrieben werden, sowie rechtswidrige oder verletzende Inhalte.</li>
+        <li>Einträge können gemeldet werden. Nach zwei Meldungen wird ein Eintrag automatisch ausgeblendet. Der Betreiber prüft gemeldete Einträge und entfernt Inhalte, die gegen diese Regeln oder Rechte Dritter verstossen. Rechteinhaber können sich direkt an <a href="mailto:info@kv-learn.app">info@kv-learn.app</a> wenden.</li>
+        <li>Eigene Einträge können jederzeit gelöscht werden; die Datei wird dabei mitgelöscht.</li>
+      </ul>
+    </section>
+
     <section class="card" id="datenschutz">
       <h2>Datenschutzerklärung</h2>
       <p class="small muted">Stand: 25.11.2026 · nach dem Schweizer Datenschutzgesetz (DSG)</p>
@@ -65,12 +78,13 @@
         <li><strong>KI-Guthaben:</strong> Guthaben und Buchungen (Datum, Betrag, KI-Modell, Anzahl verarbeiteter Texteinheiten) – für die Abrechnung.</li>
         <li><strong>Zahlungen:</strong> Abgewickelt von Stripe. Stripe erhält deine E-Mail-Adresse und Zahlungsdaten; der Betreiber erhält nur Betrag, Zeitpunkt und Zahlungsstatus.</li>
         <li><strong>KI-Erstellung:</strong> Nur wenn du eine Erstellung mit KI ausdrücklich bestätigst, werden der Text der ausgewählten Unterlagen sowie Fach- und Themennamen an den gewählten KI-Anbieter übermittelt. Ist die Bewertung offener Antworten mit KI eingeschaltet, werden zusätzlich die Frage, die Musterlösung und deine Antwort übermittelt. Lernfortschritt, Ergebnisse und dein Name werden nicht übermittelt.</li>
+        <li><strong>Gemeinsame Ablage:</strong> Hochgeladene Dateien mit Titel, Beschreibung, Ordner, Datum und deinem Vornamen sind für alle angemeldeten Personen sichtbar. Gespeichert werden zudem der Zeitpunkt deiner Bestätigung der Rechte sowie Meldungen (wer, welcher Eintrag, Grund); Meldungen sieht nur der Betreiber.</li>
         <li><strong>Im Browser:</strong> Anmeldung, ein allenfalls hinterlegter eigener API-Schlüssel und noch nicht gespeicherter Lernfortschritt werden lokal im Browser gespeichert.</li>
       </ul>
       <p>Es gibt keine Werbung, kein Tracking und keine Weitergabe zu Werbezwecken.</p>
       <h3>Dienstleister</h3>
       <ul>
-        <li>Supabase – Datenbank und Anmeldung, Speicherort Zürich (Schweiz)</li>
+        <li>Supabase – Datenbank, Dateispeicher der Ablage und Anmeldung, Speicherort Zürich (Schweiz)</li>
         <li>Have I Been Pwned – Prüfung neuer Passwörter auf bekannte Datenlecks; übermittelt werden nur die ersten 5 Zeichen einer Prüfsumme, nie das Passwort</li>
         <li>Vercel Inc. – Hosting der App (USA)</li>
         <li>Stripe – Zahlungsabwicklung</li>
