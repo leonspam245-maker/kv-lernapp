@@ -637,3 +637,5 @@ input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0
 .brand-mark { flex: none; border-radius: 8px; }
 .auth-brand { display: flex; align-items: center; gap: 12px; }
 .auth-brand img { border-radius: 10px; flex: none; }
+/* Rotes Logo auf rotem Grund: heller Rand trennt es vom Hintergrund */
+.brand-mark, .auth-brand img { box-shadow: 0 0 0 2px var(--paper); }
