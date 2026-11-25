@@ -30,6 +30,15 @@ export default async function handler(req, res) {
     });
     return send(res, 200, { url: session.url });
   } catch (e) {
-    return send(res, e.status && e.status < 500 ? e.status : 502, { error: e.type?.startsWith('Stripe') ? 'Stripe ist gerade nicht erreichbar oder nicht richtig eingerichtet. Bitte später erneut versuchen.' : (e.message || 'Aufladen fehlgeschlagen.') });
+    if (e.type?.startsWith('Stripe')) {
+      // Für die Fehlersuche im Vercel-Protokoll: Art und Meldung von Stripe (enthält keine Schlüssel)
+      const key = process.env.STRIPE_SECRET_KEY || '';
+      console.error('Stripe Checkout fehlgeschlagen', { type: e.type, code: e.code, status: e.statusCode, message: e.message, param: e.param, keyKind: key.slice(0, key.indexOf('_', 3) + 1) || 'fehlt' });
+      const msg = e.type === 'StripeAuthenticationError' || e.type === 'StripePermissionError'
+        ? 'Aufladen ist gerade nicht möglich: Der Stripe-Zugang der Lernapp ist nicht richtig eingerichtet. Bitte melde dich bei lernapp@outlook.com.'
+        : 'Stripe ist gerade nicht erreichbar oder nicht richtig eingerichtet. Bitte später erneut versuchen.';
+      return send(res, 502, { error: msg });
+    }
+    return send(res, e.status && e.status < 500 ? e.status : 502, { error: e.message || 'Aufladen fehlgeschlagen.' });
   }
 }
