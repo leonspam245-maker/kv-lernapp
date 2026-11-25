@@ -41,6 +41,7 @@ export async function requestPasswordReset(email) {
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/` });
   if (error) {
     if (/rate|limit|seconds/i.test(error.message)) throw new Error('Zu viele Anfragen. Bitte warte ein paar Minuten und versuche es erneut.');
+    if (/invalid|format|validate/i.test(error.message)) throw new Error('Diese E-Mail-Adresse ist ungültig. Bitte prüfe sie auf Tippfehler.');
     throw new Error('Die E-Mail konnte nicht verschickt werden. Bitte später erneut versuchen.');
   }
 }
