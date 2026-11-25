@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { assertReadable } from './contrast.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -196,6 +197,7 @@ try {
     assert.equal(new URL(page.url()).search, '', 'Rückkehr-Hinweis aus der Adresse entfernt');
     assert.match(await page.innerText('#credit-ledger'), /Aufgeladen[\s\S]*\+CHF 10\.00/);
     await page.screenshot({ path: path.join(SHOTS, 'cloud-guthaben.png'), fullPage: true });
+    await assertReadable(page, 'Einstellungen mit Guthaben');
     // Aktivieren und eine KI-Erstellung über das Guthaben
     await page.check('#ai-ack'); await page.click('#ai-on'); await page.waitForSelector('#ai-off');
     let aiHeaders = null;

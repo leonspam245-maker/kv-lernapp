@@ -7,6 +7,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { assertReadable } from './contrast.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -29,8 +30,14 @@ const mockAi = http.createServer((req, res) => {
   let b = ''; req.on('data', (c) => (b += c));
   req.on('end', () => {
     const body = JSON.parse(b || '{}');
-    aiCalls.push({ auth: req.headers.authorization, model: body.model });
-    const content = JSON.stringify({ questions: [{ type: 'mc', topicId: 'x', prompt: '[KI-Test] Was ist ein Antrag?', options: ['Verbindliches Angebot', 'Unverbindliche Anfrage', 'Rechnung', 'Mahnung'], answer: 0, answerBool: null, pairs: null, model: null, keywords: null, explanation: 'Ein Antrag bindet den Antragsteller.', points: 1, refs: [], uncertain: null }] });
+    const kind = body.response_format?.json_schema?.name;
+    aiCalls.push({ auth: req.headers.authorization, model: body.model, kind, user: body.messages?.[1]?.content });
+    const content = kind === 'lernapp_grade'
+      ? JSON.stringify({ results: [{ index: 0, points: 1.5, status: 'teilweise', feedback: '[KI-Test] Verbindlich stimmt, es fehlt der Vertragsabschluss.' }] })
+      : JSON.stringify({ questions: [
+        { type: 'mc', topicId: 'x', prompt: '[KI-Test] Was ist ein Antrag?', options: ['Verbindliches Angebot', 'Unverbindliche Anfrage', 'Rechnung', 'Mahnung'], answer: 0, answerBool: null, pairs: null, model: null, keywords: null, explanation: 'Ein Antrag bindet den Antragsteller.', points: 1, refs: [], uncertain: null },
+        { type: 'open', topicId: 'x', prompt: '[KI-Test] Erkläre den Antrag.', options: null, answer: null, answerBool: null, pairs: null, model: 'Ein verbindliches Angebot zum Abschluss eines Vertrags.', keywords: ['verbindlich', 'Angebot', 'Vertrag'], explanation: 'E', points: 2, refs: [], uncertain: null },
+      ] });
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 1, model: body.model, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content, refusal: null } }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
   });
@@ -266,6 +273,7 @@ try {
     assert.equal(att.score, expected);
     assert.ok(att.score < att.max, 'Fehler erfasst');
     await page.screenshot({ path: path.join(SHOTS, '07-quiz-auswertung.png'), fullPage: true });
+    await assertReadable(page, 'Quiz-Auswertung');
     await go(`#/thema/${topic.id}`);
     assert.match(await page.innerText('main'), /Hier machst du noch Fehler/);
   });
@@ -288,6 +296,7 @@ try {
     await page.waitForSelector('.result-hero');
     assert.match(await page.innerText('#result'), /Note ca\./);
     await page.screenshot({ path: path.join(SHOTS, '08-probepruefung-ergebnis.png'), fullPage: true });
+    await assertReadable(page, 'Probeprüfung-Ergebnis');
   });
 
   // ---------- 8. Lernplan ----------
@@ -423,6 +432,37 @@ try {
     await page.waitForSelector('.question');
     assert.match(await page.innerText('main'), /\[KI-Test\] Was ist ein Antrag/);
     assert.equal(aiCalls.at(-1).auth, `Bearer ${KEY}`, 'Anfrage mit dem eigenen Schlüssel');
+    // Offene Frage: die KI bewertet die Antwort
+    await page.locator('[data-opt] input').first().check(); await page.click('#check'); await page.click('#next');
+    await page.fill('textarea[name=a]', 'Ein verbindliches Angebot');
+    await page.click('#check');
+    await page.waitForSelector('.feedback:has-text("Bewertung der KI")');
+    const fb = await page.innerText('.feedback');
+    assert.match(fb, /Teilweise richtig · 1\.5 von 2 P\./);
+    assert.match(fb, /es fehlt der Vertragsabschluss/);
+    assert.equal(aiCalls.at(-1).kind, 'lernapp_grade');
+    assert.match(aiCalls.at(-1).user, /<antwort>Ein verbindliches Angebot<\/antwort>/);
+    assert.doesNotMatch(aiCalls.at(-1).user, /Handout|Vertragsentstehung/, 'keine Unterlagen übertragen, nur Frage, Musterlösung und Antwort');
+    await assertReadable(page, 'KI-Bewertung');
+    await page.click('#next'); await page.waitForSelector('.result-hero');
+    await page.waitForFunction(() => /gespeichert\./.test(document.querySelector('#saved')?.textContent || ''));
+    const att = (await state()).attempts.at(-1);
+    assert.equal(att.score, 2.5, '1 (MC) + 1.5 (KI-Bewertung)');
+    // Probeprüfung: offene Antworten nach dem Abgeben von der KI bewertet, Punkte anpassbar
+    await go(`#/ueben?themen=${topic.id}`);
+    await page.check('input[name=engine][value=ki]');
+    await page.click('[data-make="exam"]'); await page.click('.dialog button[value=yes]');
+    await page.waitForSelector('#submit');
+    await page.locator('#exam input[type=radio]').first().check();
+    await page.fill('#exam textarea', 'Ein verbindliches Angebot');
+    await page.click('#submit');
+    await page.waitForSelector('.feedback:has-text("Bewertung der KI")');
+    assert.equal(await page.inputValue('#pts-1'), '1.5', 'Punkte der KI vorgeschlagen');
+    assert.match(await page.innerText('[data-q="1"]'), /bei Bedarf anpassen/);
+    await page.fill('#pts-1', '2');
+    await page.click('#finish'); await page.waitForSelector('#result .result-hero');
+    assert.match(await page.innerText('#result'), /3 \/ 3/, 'angepasste Punkte zählen');
+    await assertReadable(page, 'Probeprüfung mit KI-Bewertung');
     // Ohne mitgeschickten Schlüssel lehnt der Server ab (kein gemeinsamer Schlüssel)
     const noKey = await fetch(BASE + '/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', cookie: await cookieOf(ctx) }, body: JSON.stringify({ type: 'quiz', subjectName: 'W&G', topics: [], sources: [{ id: 's', title: 't', origin: 'x', topicId: 't', content: 'x' }] }) });
     assert.equal(noKey.status, 400);
@@ -555,6 +595,28 @@ try {
     await p3.fill('#auth-email', 'mia@example.ch'); await p3.fill('#auth-pw', 'Zweites123'); await p3.click('#auth-submit');
     await p3.waitForSelector('main h1:not(#auth-title)');
     await c3.close();
+  });
+
+  // ---------- 15. Lesbarkeit ----------
+  await check('Lesbarkeit: kein Text mit zu wenig Kontrast (z. B. weiss auf weiss), Computer und Handy', async () => {
+    const db = await state();
+    const pages = ['#/', '#/faecher', '#/import?art=pdf', '#/import?art=mykv', '#/import?art=quizlet', '#/import?art=onenote', '#/ueben', '#/plan', '#/einstellungen',
+      `#/fach/${db.subjects[0].id}`, `#/thema/${db.topics[0].id}`, `#/pruefung/${db.exams[0].id}`, ...db.contents.slice(0, 4).map((c) => `#/inhalt/${c.id}`), `#/karten?themen=${db.cards[0].topicId}&alle=1`];
+    const m = await browser.newContext({ ...devices['iPhone 13'], storageState: await ctx.storageState() });
+    const mp = await m.newPage();
+    for (const p of [page, mp]) {
+      for (const h of pages) {
+        await p.goto(BASE + '/' + h);
+        await p.waitForSelector('main h1', { timeout: 10000 }).catch(() => { throw new Error(`Seite lädt nicht: ${h}`); });
+        await assertReadable(p, `${p === page ? 'Computer' : 'Handy'} ${h}`);
+      }
+      await p.goto(BASE + '/rechtliches.html'); await assertReadable(p, 'Rechtliches');
+    }
+    // Anmeldeseite (ohne Anmeldung)
+    const anon = await browser.newContext(); const ap = await anon.newPage();
+    await ap.goto(BASE + '/'); await ap.waitForSelector('#auth-form'); await assertReadable(ap, 'Anmeldung');
+    await ap.click('#auth-switch'); await assertReadable(ap, 'Registrierung');
+    await anon.close(); await m.close();
   });
 
   await check('Keine JavaScript-Fehler im Browser', async () => { assert.deepEqual(errors, []); });

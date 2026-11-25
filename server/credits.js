@@ -6,6 +6,8 @@
 export const PACKS = [500, 1000, 2000];
 /** Höchstzahl Ausgabe-Tokens pro Anfrage (begrenzt auch die Reservation). */
 export const MAX_OUTPUT_TOKENS = 32000;
+/** Ausgabegrenze für die Bewertung offener Antworten (kurz, daher kleine Reservation). */
+export const GRADE_MAX_TOKENS = 4000;
 
 const num = (v, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fallback);
 
@@ -40,9 +42,9 @@ export function chargeRappen(usd, cfg = creditConfig()) {
   return Math.max(1, Math.ceil(usd * cfg.usdChf * cfg.markup * 100 - 1e-9));
 }
 /** Höchstbetrag, der vor einer Anfrage reserviert wird (Eingabe grob geschätzt, Ausgabe maximal). */
-export function holdRappen(provider, inputChars, cfg = creditConfig()) {
+export function holdRappen(provider, inputChars, cfg = creditConfig(), maxOutput = MAX_OUTPUT_TOKENS) {
   const input = Math.ceil((inputChars || 0) / 2.5) + 4000; // Text + Anweisungen und Schema
-  return chargeRappen(costUsd(provider, { input, output: MAX_OUTPUT_TOKENS }, cfg), cfg);
+  return chargeRappen(costUsd(provider, { input, output: maxOutput }, cfg), cfg);
 }
 
 export function creditStatus(env = process.env) {

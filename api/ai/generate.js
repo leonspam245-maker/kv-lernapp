@@ -2,7 +2,7 @@
 // 1. Mit eigenem Schlüssel (Kopfzeile X-AI-Key): nur für diese Anfrage weitergereicht, nirgends gespeichert.
 // 2. Mit Guthaben: Anfrage mit dem Schlüssel des Betreibers (Umgebungsvariable bei Vercel), vorher wird
 //    der Höchstbetrag reserviert, danach der tatsächliche Preis abgerechnet und der Rest zurückgebucht.
-import { generateWithAi, requestChars } from '../../server/ai.js';
+import { generateWithAi, requestChars, maxTokensFor } from '../../server/ai.js';
 import { creditsEnabled, creditConfig, costUsd, chargeRappen, holdRappen, serverKeyFor } from '../../server/credits.js';
 import { send, authorizedUser, rpc, chf } from '../_shared.js';
 
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     if (!serverKey) return send(res, 503, { error: `Für ${provider === 'chatgpt' ? 'ChatGPT' : 'Claude'} ist kein Guthaben-Zugang eingerichtet. Wähle den anderen Anbieter oder nutze einen eigenen Schlüssel.` });
     const cfg = creditConfig();
     const secret = process.env.CREDITS_SERVER_SECRET;
-    const hold = holdRappen(provider, requestChars(request), cfg);
+    const hold = holdRappen(provider, requestChars(request), cfg, maxTokensFor(request.type));
     let holdId;
     try {
       holdId = await rpc('ai_hold', { p_secret: secret, p_amount: hold, p_provider: provider }, auth);

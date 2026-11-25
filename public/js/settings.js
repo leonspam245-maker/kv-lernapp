@@ -87,7 +87,8 @@ export function settingsView(el) {
         </form>`}`}
     <div class="notice ${configured ? 'notice-ok' : 'notice-warn'}">Status: ${billing === 'credit' ? (configured ? `Abrechnung über dein Guthaben (${P.name}).` : `${P.name} ist mit Guthaben nicht verfügbar.`) : configured ? `Dein Schlüssel für ${P.name} ist hinterlegt.` : `Kein eigener Schlüssel für ${P.name} hinterlegt – KI-Funktionen sind nicht verfügbar.`} ${consent ? `KI-Dienst (${P.name}) aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
     ${consent
-      ? '<button class="btn btn-danger" id="ai-off">KI-Dienst deaktivieren</button>'
+      ? `<label class="check"><input type="checkbox" id="ai-grading" ${db.settings.aiGrading !== false ? 'checked' : ''}> <span><strong>Offene Antworten mit KI bewerten</strong> (Quiz und Probeprüfung). Übertragen werden nur Frage, Musterlösung und deine Antwort. Du erhältst Punkte und eine kurze Begründung und kannst die Punkte in der Probeprüfung anpassen.${billing === 'credit' ? ' Kosten pro Antwort: meist weniger als CHF 0.05.' : ''}</span></label>
+         <button class="btn btn-danger" id="ai-off">KI-Dienst deaktivieren</button>`
       : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte an ${P.name} übertragen werden und dass Kosten entstehen${billing === 'credit' ? ', die von meinem Guthaben abgezogen werden' : ''}.</label>
          <button class="btn btn-primary" id="ai-on" ${configured ? '' : 'disabled'}>KI-Dienst aktivieren</button>`}
     <p class="small muted" style="margin-top:14px"><a href="/rechtliches.html">Impressum, Bedingungen und Datenschutz</a></p>
@@ -173,6 +174,11 @@ export function settingsView(el) {
   el.querySelector('#ai-on')?.addEventListener('click', async () => {
     if (!el.querySelector('#ai-ack').checked) return toast('Bitte zuerst bestätigen, dass du die Hinweise gelesen hast.', 'error');
     try { await commit((d) => { d.settings.aiConsent = true; d.settings.aiConsentAt = new Date().toISOString(); }); toast('KI-Dienst aktiviert. Unterlagen werden nur nach deiner Bestätigung übertragen.'); rerender(); } catch (e) { toast(e.message, 'error'); }
+  });
+  el.querySelector('#ai-grading')?.addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    try { await commit((d) => { d.settings.aiGrading = on; }); toast(on ? 'Offene Antworten werden mit KI bewertet.' : 'Offene Antworten werden über Schlüsselbegriffe bewertet.'); }
+    catch (err) { e.target.checked = !on; toast(err.message, 'error'); }
   });
   el.querySelector('#ai-off')?.addEventListener('click', async () => {
     try { await commit((d) => { d.settings.aiConsent = false; d.settings.aiConsentAt = null; }); toast('KI-Dienst deaktiviert. Es werden keine Unterlagen mehr übertragen.'); rerender(); } catch (e) { toast(e.message, 'error'); }

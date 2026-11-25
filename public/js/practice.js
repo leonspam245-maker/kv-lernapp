@@ -85,6 +85,41 @@ export function practiceView(el, _id, query) {
 
 const attemptsOf = (contentId) => store.db.attempts.filter((a) => a.contentId === contentId);
 
+/** KI-Anfrage an den Lernapp-Server (Guthaben oder eigener Schlüssel). Liefert die Antwort des Servers. */
+async function postAi(payload, { quiet = false } = {}) {
+  const credit = billingMode() === 'credit';
+  const aiKey = credit ? '' : getAiKey(aiProvider());
+  if (!credit && !aiKey) throw new Error('Kein eigener API-Schlüssel hinterlegt. Trage ihn unter «Einstellungen» ein.');
+  let res;
+  try {
+    const token = await accessToken();
+    res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(aiKey ? { 'X-AI-Key': aiKey } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) });
+  }
+  catch { throw new Error('Keine Verbindung zum Lernapp-Server.'); }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `KI-Anfrage fehlgeschlagen (${res.status}).`);
+  if (body.billing && !quiet) toast(`KI-Kosten: ${chf(body.billing.charged)} · Guthaben: ${chf(body.billing.balance)}`, 'info');
+  return body;
+}
+
+/** Offene Antworten mit KI bewerten? (KI bewusst aktiviert und Bewertung nicht ausgeschaltet) */
+export const aiGrading = () => aiReady() && store.db.settings.aiGrading !== false;
+let gradeHint = false;
+/**
+ * Bewertet offene Antworten mit der KI. items: [{ q, answer }]. Liefert pro Eintrag { status, points, feedback, ai: true }
+ * oder null, wenn die KI nicht verfügbar ist (dann gilt die Bewertung über Schlüsselbegriffe).
+ */
+async function gradeWithAi(items) {
+  if (!items.length || !aiGrading()) return items.map(() => null);
+  try {
+    const body = await postAi({ type: 'grade', items: items.map(({ q, answer }) => ({ prompt: q.prompt, model: q.model || '', keywords: q.keywords || [], answer: String(answer || '').slice(0, 4000), points: q.points })) }, { quiet: true });
+    return body.data.results.map((x) => (x.points === null ? null : { status: x.status, points: x.points, feedback: x.feedback, ai: true }));
+  } catch (e) {
+    if (!gradeHint) { gradeHint = true; toast(`KI-Bewertung nicht möglich: ${e.message} Bewertet wird über Schlüsselbegriffe.`, 'info'); }
+    return items.map(() => null);
+  }
+}
+
 async function callAi(type, sources, subjectId) {
   const topicIds = [...new Set(sources.map((s) => s.topicId))];
   const chars = sources.reduce((n, s) => n + (s.pages?.reduce((m, p) => m + (p.text?.length || 0), 0) || 0) + (s.content?.length || 0) + (s.cards?.reduce((m, c) => m + c.term.length + c.def.length, 0) || 0), 0);
@@ -100,18 +135,8 @@ async function callAi(type, sources, subjectId) {
       content: s.cards?.length ? s.cards.map((c) => `${c.term}: ${c.def}`).join('\n') : s.content,
     })),
   };
-  const credit = billingMode() === 'credit';
-  const aiKey = credit ? '' : getAiKey(aiProvider());
-  if (!credit && !aiKey) throw new Error('Kein eigener API-Schlüssel hinterlegt. Trage ihn unter «Einstellungen» ein.');
-  let res;
-  try {
-    const token = await accessToken();
-    res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(aiKey ? { 'X-AI-Key': aiKey } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) });
-  }
-  catch { throw new Error('Keine Verbindung zum Lernapp-Server.'); }
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `KI-Anfrage fehlgeschlagen (${res.status}).`);
-  if (body.billing) toast(`KI-Kosten: ${chf(body.billing.charged)} · Guthaben: ${chf(body.billing.balance)}`, 'info');
+  const body = await postAi(payload);
+
   // Verweise und Themen absichern
   const valid = new Set(sources.map((s) => s.id));
   const fixRefs = (refs) => (refs || []).filter((r) => valid.has(r.sourceId)).map((r) => ({ sourceId: r.sourceId, page: r.page ?? null }));
@@ -232,10 +257,11 @@ function solutionHtml(q, answer, result) {
   if (q.type === 'mc') sol = `Richtige Antwort: <strong>${esc(q.options[q.answer])}</strong>`;
   if (q.type === 'tf') sol = `Die Aussage ist <strong>${q.answerBool ? 'richtig' : 'falsch'}</strong>.`;
   if (q.type === 'match') sol = `<ul>${q.pairs.map((p, i) => `<li${answer?.[i] === i ? '' : ' style="color:var(--bad)"'}><strong>${esc(p.left)}</strong> → ${esc(p.right)}</li>`).join('')}</ul>`;
-  if (q.type === 'open') sol = `<strong>Musterlösung:</strong> ${esc(q.model)}${result.hits ? `<br><span class="small">Erkannte Schlüsselbegriffe: ${result.hits.length ? esc(result.hits.join(', ')) : 'keine'}${result.missing?.length ? ` · fehlend: ${esc(result.missing.join(', '))}` : ''}</span>` : ''}`;
+  if (q.type === 'open') sol = `<strong>Musterlösung:</strong> ${esc(q.model)}${result.hits && !result.ai ? `<br><span class="small">Erkannte Schlüsselbegriffe: ${result.hits.length ? esc(result.hits.join(', ')) : 'keine'}${result.missing?.length ? ` · fehlend: ${esc(result.missing.join(', '))}` : ''}</span>` : ''}`;
   const cls = result.status === 'richtig' ? 'ok' : result.status === 'unklar' ? 'unsure' : 'bad';
   const head = { richtig: 'Richtig', falsch: 'Leider falsch', teilweise: 'Teilweise richtig', unklar: 'Nicht eindeutig bewertbar – vergleiche mit der Musterlösung' }[result.status];
   return `<div class="feedback ${cls}"><p><strong>${head}</strong>${q.points ? ` · ${result.points} von ${q.points} P.` : ''}</p><p>${sol}</p>
+    ${result.ai ? `<p><strong>Bewertung der KI:</strong> ${esc(result.feedback)}</p>` : ''}
     ${q.explanation && q.type !== 'match' ? `<p class="small"><strong>Erklärung:</strong> ${esc(q.explanation)}</p>` : ''}
     ${q.uncertain ? `<p class="small" style="color:var(--warn)"><strong>Achtung:</strong> ${esc(q.uncertain)}</p>` : ''}
     <p class="small">Quelle: ${refChips(q.refs, db)}</p></div>`;
@@ -286,10 +312,15 @@ function runQuiz(el, c, questions, resume = null) {
       <div class="question"><div class="prompt">${esc(q.prompt)}</div>${questionInputHtml(q, 'a')}</div>
       <div id="fb"></div>
       <div class="row end" id="actions"><button class="btn btn-primary" id="check">Antwort prüfen</button></div></section>`;
-    el.querySelector('#check').addEventListener('click', () => {
+    el.querySelector('#check').addEventListener('click', async () => {
       const answer = readAnswer(el, q, 'a');
       if (isEmpty(q, answer)) return toast('Bitte zuerst antworten.', 'error');
-      const r = grade(q, answer);
+      let r = grade(q, answer);
+      if (q.type === 'open' && aiGrading()) {
+        const btn = el.querySelector('#check'); btn.disabled = true; btn.textContent = 'KI bewertet …';
+        el.querySelectorAll('input,select,textarea').forEach((i) => (i.disabled = true));
+        r = (await gradeWithAi([{ q, answer }]))[0] || r;
+      }
       el.querySelectorAll('input,select,textarea').forEach((i) => (i.disabled = true));
       markOptions(el, q, answer);
       el.querySelector('#fb').innerHTML = solutionHtml(q, answer, r);
@@ -352,6 +383,13 @@ function runExam(el, c) {
     if (open && !(await confirmDialog(`${plural(open, 'Aufgabe ist', 'Aufgaben sind')} noch nicht beantwortet. Trotzdem abgeben?`, { ok: 'Abgeben' }))) return;
     clearTimeout(draftTimer);
     const graded = qs.map((q, i) => ({ q, answer: answers[i], r: grade(q, answers[i]) }));
+    // Offene Antworten mit KI bewerten (leere Antworten bleiben bei 0 Punkten)
+    const openIdx = graded.map((g, i) => (g.q.type === 'open' && !isEmpty(g.q, g.answer) ? i : null)).filter((i) => i !== null);
+    if (openIdx.length && aiGrading()) {
+      const btn = el.querySelector('#submit'); btn.disabled = true; btn.textContent = 'KI bewertet offene Antworten …';
+      const ai = await gradeWithAi(openIdx.map((i) => graded[i]));
+      openIdx.forEach((i, k) => { if (ai[k]) graded[i].r = ai[k]; });
+    }
     // Ergebnis sofort festhalten (offene Antworten mit dem Vorschlag); bestätigte Punkte ersetzen es danach
     const attemptId = uid('a');
     saveProgress({ kind: 'attempt', attempt: buildAttempt(c, 'exam', graded.map((g) => ({ q: g.q, points: g.r.points, maxPoints: g.q.points })), attemptId) }, { kind: 'session', contentId: c.id, value: null });
@@ -360,8 +398,8 @@ function runExam(el, c) {
     graded.forEach((g, i) => {
       const box = el.querySelector(`[data-q="${i}"]`);
       markOptions(box, g.q, g.answer);
-      box.querySelector('.sol').innerHTML = solutionHtml(g.q, g.answer, g.r) + (g.r.status === 'unklar'
-        ? `<div class="field" style="margin-top:10px"><label for="pts-${i}">Punkte selbst bestätigen (0–${g.q.points})</label><div class="row"><input type="number" id="pts-${i}" min="0" max="${g.q.points}" step="0.5" value="${g.r.points}" style="max-width:120px"><span class="small muted">Vorschlag aufgrund der Schlüsselbegriffe: ${g.r.points} P.</span></div></div>` : '');
+      box.querySelector('.sol').innerHTML = solutionHtml(g.q, g.answer, g.r) + (g.r.status === 'unklar' || g.r.ai
+        ? `<div class="field" style="margin-top:10px"><label for="pts-${i}">${g.r.ai ? `Punkte (${g.q.points} möglich) – bei Bedarf anpassen` : `Punkte selbst bestätigen (0–${g.q.points})`}</label><div class="row"><input type="number" id="pts-${i}" min="0" max="${g.q.points}" step="0.5" value="${g.r.points}" style="max-width:120px"><span class="small muted">${g.r.ai ? `Bewertung der KI: ${g.r.points} P.` : `Vorschlag aufgrund der Schlüsselbegriffe: ${g.r.points} P.`}</span></div></div>` : '');
     });
     const pending = graded.map((g, i) => (g.r.status === 'unklar' ? i : null)).filter((x) => x !== null);
     const res = el.querySelector('#result');
@@ -371,7 +409,7 @@ function runExam(el, c) {
       const items = [];
       for (const [i, g] of graded.entries()) {
         let pts = g.r.points;
-        if (g.r.status === 'unklar') {
+        if (g.r.status === 'unklar' || g.r.ai) {
           pts = Number(el.querySelector(`#pts-${i}`).value);
           if (Number.isNaN(pts) || pts < 0 || pts > g.q.points) { toast(`Aufgabe ${i + 1}: Bitte Punkte zwischen 0 und ${g.q.points} eingeben.`, 'error'); return; }
           el.querySelector(`#pts-${i}`).disabled = true;

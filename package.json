@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/unit.test.js tests/credits.test.js",
+    "test": "node --test tests/unit.test.js tests/credits.test.js tests/ai-grade.test.js",
     "e2e": "node tests/e2e.mjs",
     "handy": "node server.js --handy",
     "beispiel-pdf": "python3 scripts/make-sample-pdf.py && python3 scripts/make-sample-docx.py",

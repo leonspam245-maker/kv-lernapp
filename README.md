@@ -91,6 +91,10 @@ Einrichtung bei Vercel (Settings → Environment Variables, Typ «Sensitive», d
 
 Bei Stripe unter Developers → Webhooks einen Endpunkt `https://kv-lernapp.vercel.app/api/stripe/webhook` mit den Ereignissen `checkout.session.completed` und `checkout.session.async_payment_succeeded` anlegen. Erst wenn alle drei Stripe-/Kennwort-Variablen gesetzt sind, zeigt die App das Guthaben an.
 
+### Offene Antworten mit KI bewerten
+
+Ist der KI-Dienst aktiviert, bewertet er offene Antworten in Quiz und Probeprüfung: Punkte in halben Schritten und eine kurze Begründung. Übertragen werden nur Frage, Musterlösung, Schlüsselbegriffe und die Antwort. In der Probeprüfung lassen sich die Punkte anpassen. Ausschalten unter Einstellungen; ohne KI gilt die Bewertung über Schlüsselbegriffe mit Selbsteinschätzung.
+
 Übertragen werden nur die ausgewählten Unterlagen, und erst nach einer Bestätigung pro Erstellung.
 
 ## Tests

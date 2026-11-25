@@ -608,3 +608,26 @@ input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0
 /* KI-Guthaben */
 .credit-box { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; border: 2px solid var(--ink); border-radius: 18px; padding: 16px 18px; margin: 12px 0; background: var(--paper); }
 .credit-box .big-number { font-size: clamp(28px, 5vw, 40px); line-height: 1.1; }
+
+/* Ergebnisfläche (Quiz, Prüfung, Karteikarten): dunkel mit heller Schrift.
+   Muss nach der allgemeinen Kartenregel stehen, sonst wird der Hintergrund hell und die Schrift unsichtbar. */
+.card.result-hero { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.card.result-hero .btn-primary { background: var(--paper); background-image: none; color: var(--ink); border-color: var(--paper); }
+.card.result-hero .btn:not(.btn-primary) { background: transparent; color: var(--paper); border-color: var(--on-dark-muted); }
+.card.result-hero .btn:not(.btn-primary):hover { background: var(--paper); color: var(--ink); }
+
+/* Lesbarkeit: Akzentrot nur als Fläche, für Text auf hellem Grund das dunklere --accent-ink (Kontrast ≥ 4.5 : 1) */
+.btn-link, .eyebrow a, .list-link:hover .title, .kind, .face-back .eyebrow, .stop.is-today .stop-day { color: var(--accent-ink); }
+.btn-known, .btn-known:hover { background: var(--accent-ink); border-color: var(--accent-ink); color: var(--paper); }
+.tile-dark .badge-accent { background: var(--paper); color: var(--ink); }
+.toast-close { opacity: 1; }
+/* Speicherstatus in der roten Kopfzeile als helle Pille, damit er auf Rot gut lesbar ist */
+.save-state:not(:empty) { background: var(--paper); color: var(--ink); padding: 3px 10px; border-radius: var(--pill); }
+.save-state[data-state="error"]:not(:empty) { color: var(--bad); }
+.save-state[data-state="offline"]:not(:empty) { color: var(--accent-ink); }
+/* Links direkt auf dem farbigen Seitenhintergrund (ausserhalb von Karten) */
+.on-page-bg, .on-page-bg a { color: var(--ink); }
+.on-page-bg a { text-decoration: underline; font-weight: 700; }
+/* Erledigte Einheiten: durchgestrichen und mit Haken, aber nicht blass (sonst zu wenig Kontrast) */
+.unit.done { opacity: 1; background: var(--surface); }
+.unit.done .unit-task { color: var(--muted); }
