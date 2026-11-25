@@ -186,9 +186,12 @@ try {
       await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('mock-supabase')); s.credits = { u1: { balance: 1000, ledger: [{ kind: 'topup', amount_rappen: 1000, created_at: new Date().toISOString() }] } }; localStorage.setItem('mock-supabase', JSON.stringify(s)); });
       await rt.fulfill({ json: { url: BASE + '/?guthaben=ok#/einstellungen' } });
     });
+    assert.equal(await page.locator('[data-pack="1000"]').isDisabled(), true, 'erst nach Zustimmung zu den Bedingungen');
+    await page.check('#terms-ok');
     await page.click('[data-pack="1000"]');
     await page.waitForSelector('.toast:has-text("Guthaben gutgeschrieben: jetzt CHF 10.00")', { timeout: 20000 });
     assert.equal(checkoutBody.amount, 1000);
+    assert.equal(checkoutBody.termsAccepted, true);
     assert.match(checkoutAuth, /^Bearer /);
     assert.equal(new URL(page.url()).search, '', 'Rückkehr-Hinweis aus der Adresse entfernt');
     assert.match(await page.innerText('#credit-ledger'), /Aufgeladen[\s\S]*\+CHF 10\.00/);
@@ -209,6 +212,17 @@ try {
     await page.waitForSelector('.toast:has-text("KI-Kosten: CHF 0.23 · Guthaben: CHF 9.77")');
     assert.equal(aiHeaders['x-ai-key'], undefined, 'kein eigener Schlüssel nötig');
     await page.unroute('**/api/ai/generate'); await page.unroute('**/api/credits/checkout');
+  });
+
+  await check('Rechtliches: Impressum, Bedingungen und Datenschutz öffentlich ohne Anmeldung', async () => {
+    const p = await (await browser.newContext()).newPage();
+    await p.goto(BASE + '/rechtliches.html');
+    const t = await p.innerText('main');
+    for (const h of ['Impressum', 'Bedingungen für das KI-Guthaben', 'Datenschutzerklärung', 'Rückerstattung', 'Stripe']) assert.ok(t.includes(h), h);
+    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await p.goto(BASE + '/'); await p.waitForSelector('#auth-form');
+    assert.equal(await p.locator('a[href="/rechtliches.html"]').count(), 1, 'Link auf der Anmeldeseite');
+    await p.context().close();
   });
 
   await check('Installierbar: Manifest, Symbole und Service Worker', async () => {

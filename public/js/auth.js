@@ -38,6 +38,7 @@ export function loginView(el, onDone) {
           ? 'Schon ein Konto? <button type="button" class="btn-link" id="auth-switch">Anmelden</button>'
           : 'Noch kein Konto? <button type="button" class="btn-link" id="auth-switch">Konto einrichten</button>'}</p>
       </form>
+      <p class="small muted" style="grid-column:1/-1;margin:12px 0 0"><a href="/rechtliches.html">Impressum, Bedingungen und Datenschutz</a></p>
     </section>`;
     const form = el.querySelector('#auth-form');
     const val = (id) => form.querySelector(id)?.value ?? '';

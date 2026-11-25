@@ -104,12 +104,15 @@ test('Eigener Schlüssel: kein Guthaben belastet', async () => {
 test('Aufladen: nur angebotene Beträge, Zahlungsseite mit Konto und Betrag', async () => {
   let params;
   checkout.deps.stripe = () => ({ checkout: { sessions: { create: async (p) => { params = p; return { url: 'https://checkout.stripe.com/c/pay/test' }; } } } });
-  let res = fakeRes(); await checkout.default(req({ amount: 123 }), res); assert.equal(res.statusCode, 400);
-  res = fakeRes(); await checkout.default(req({ amount: 1000 }), res);
+  let res = fakeRes(); await checkout.default(req({ amount: 123, termsAccepted: true }), res); assert.equal(res.statusCode, 400);
+  res = fakeRes(); await checkout.default(req({ amount: 1000 }), res); assert.equal(res.statusCode, 400, 'ohne Zustimmung zu den Bedingungen');
+  assert.match(res.body.error, /Bedingungen/);
+  res = fakeRes(); await checkout.default(req({ amount: 1000, termsAccepted: true }), res);
   assert.equal(res.statusCode, 200); assert.equal(res.body.url, 'https://checkout.stripe.com/c/pay/test');
   assert.equal(params.line_items[0].price_data.currency, 'chf');
   assert.equal(params.line_items[0].price_data.unit_amount, 1000);
   assert.equal(params.metadata.user_id, 'user-1');
+  assert.ok(params.metadata.terms_accepted_at, 'Zeitpunkt der Zustimmung festgehalten');
   assert.equal(params.success_url, 'https://kv-lernapp.vercel.app/?guthaben=ok#/einstellungen');
 });
 

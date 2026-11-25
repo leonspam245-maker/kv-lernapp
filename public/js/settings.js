@@ -66,8 +66,9 @@ export function settingsView(el) {
     ${ci.providers?.[provider] ? '' : `<div class="notice notice-warn">Für ${P.name} ist noch kein Guthaben-Zugang eingerichtet. Wähle den anderen Anbieter oder nutze einen eigenen Schlüssel.</div>`}
     <div class="credit-box">
       <div><span class="eyebrow">Dein Guthaben</span><div class="big-number" id="credit-balance">…</div></div>
-      <div class="row">${(ci.packs || []).map((a) => `<button type="button" class="btn" data-pack="${a}">${chf(a)} aufladen</button>`).join('')}</div>
+      <div class="row">${(ci.packs || []).map((a) => `<button type="button" class="btn" data-pack="${a}" disabled>${chf(a)} aufladen</button>`).join('')}</div>
     </div>
+    <label class="check"><input type="checkbox" id="terms-ok"> <span>Ich akzeptiere die <a href="/rechtliches.html#bedingungen" target="_blank" rel="noopener">Bedingungen für das KI-Guthaben</a> und habe die <a href="/rechtliches.html#datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
     <p class="small muted">Bezahlung über Stripe. Die Kartendaten gibst du nur bei Stripe ein; die Lernapp sieht sie nie. Das Guthaben gilt nur für KI-Erstellungen in dieser App.</p>
     <div id="credit-ledger"></div>` : `
     <h3>Dein eigener Schlüssel</h3>
@@ -89,6 +90,7 @@ export function settingsView(el) {
       ? '<button class="btn btn-danger" id="ai-off">KI-Dienst deaktivieren</button>'
       : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte an ${P.name} übertragen werden und dass Kosten entstehen${billing === 'credit' ? ', die von meinem Guthaben abgezogen werden' : ''}.</label>
          <button class="btn btn-primary" id="ai-on" ${configured ? '' : 'disabled'}>KI-Dienst aktivieren</button>`}
+    <p class="small muted" style="margin-top:14px"><a href="/rechtliches.html">Impressum, Bedingungen und Datenschutz</a></p>
   </section>
 
   <section class="card">
@@ -146,7 +148,10 @@ export function settingsView(el) {
     if (b.dataset.billing === billing) return;
     try { await commit((d) => { d.settings.aiBilling = b.dataset.billing; }); rerender(); } catch (e) { toast(e.message, 'error'); }
   }));
+  const terms = el.querySelector('#terms-ok');
+  terms?.addEventListener('change', () => el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = !terms.checked)));
   el.querySelectorAll('[data-pack]').forEach((b) => b.addEventListener('click', async () => {
+    if (!terms?.checked) return toast('Bitte zuerst die Bedingungen akzeptieren.', 'error');
     el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = true));
     try { location.href = await startCheckout(Number(b.dataset.pack)); }
     catch (e) { toast(e.message, 'error'); el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = false)); }

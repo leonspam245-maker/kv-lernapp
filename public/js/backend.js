@@ -102,7 +102,7 @@ export async function getCredits() {
 export async function startCheckout(amount) {
   const token = await accessToken();
   let res;
-  try { res = await fetch('/api/credits/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ amount }) }); }
+  try { res = await fetch('/api/credits/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ amount, termsAccepted: true }) }); }
   catch { throw new Error('Keine Verbindung. Bitte Internetverbindung prüfen.'); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.url) throw new Error(body.error || 'Die Zahlungsseite konnte nicht geöffnet werden.');

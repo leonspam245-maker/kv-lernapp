@@ -14,13 +14,15 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const amount = Number(body?.amount);
     if (!PACKS.includes(amount)) return send(res, 400, { error: 'Bitte einen der angebotenen Beträge wählen.' });
+    if (body?.termsAccepted !== true) return send(res, 400, { error: 'Bitte zuerst die Bedingungen für das KI-Guthaben akzeptieren.' });
+    const termsAt = new Date().toISOString();
     const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
     const session = await deps.stripe().checkout.sessions.create({
       mode: 'payment',
       line_items: [{ quantity: 1, price_data: { currency: 'chf', unit_amount: amount, product_data: { name: `KI-Guthaben Lernapp CHF ${(amount / 100).toFixed(2)}`, description: 'Guthaben für KI-Erstellungen in der KV-Lernapp' } } }],
       client_reference_id: user.id,
       customer_email: user.email || undefined,
-      metadata: { user_id: user.id, credit_rappen: String(amount) },
+      metadata: { user_id: user.id, credit_rappen: String(amount), terms_accepted_at: termsAt },
       payment_intent_data: { metadata: { user_id: user.id, credit_rappen: String(amount) } },
       locale: 'de',
       success_url: `${origin}/?guthaben=ok#/einstellungen`,

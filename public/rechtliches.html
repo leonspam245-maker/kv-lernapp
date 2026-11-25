@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#EC3F2B">
+  <title>Rechtliches – KV-Lernapp</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .legal { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+    .legal .card { margin-bottom: 20px; }
+    .legal h2 { margin-top: 0; }
+    .legal h3 { margin-top: 1.4em; }
+    .fill { background: #ffe58f; color: #1d1b1a; padding: 0 4px; border-radius: 4px; font-weight: 700; }
+    .toc a { margin-right: 14px; }
+    .legal > p a { color: var(--ink); font-weight: 700; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="legal">
+    <p><a href="/">← Zur Lernapp</a></p>
+    <h1 class="hero-title" style="margin:8px 0 20px">Rechtliches</h1>
+    <div class="notice notice-warn" id="draft-note">Entwurf: Die gelb markierten Angaben fehlen noch. Vor dem Annehmen echter Zahlungen ergänzen.</div>
+    <p class="toc"><a href="#impressum">Impressum</a><a href="#bedingungen">Bedingungen KI-Guthaben</a><a href="#datenschutz">Datenschutz</a></p>
+
+    <section class="card" id="impressum">
+      <h2>Impressum</h2>
+      <p>Betreiber der KV-Lernapp:<br>
+        <span class="fill">[Vorname Nachname]</span><br>
+        <span class="fill">[Strasse Nr.]</span><br>
+        <span class="fill">[PLZ Ort]</span>, Schweiz<br>
+        E-Mail: <span class="fill">[Kontakt-E-Mail]</span></p>
+      <p>Die KV-Lernapp ist ein privates Projekt und kein Angebot einer Schule, eines Lehrbetriebs oder eines Verbands.</p>
+    </section>
+
+    <section class="card" id="bedingungen">
+      <h2>Bedingungen für das KI-Guthaben</h2>
+      <p class="small muted">Stand: 25.11.2026</p>
+      <h3>1. Leistung</h3>
+      <p>Die KV-Lernapp ist ohne KI kostenlos nutzbar. Optional können angemeldete Personen Lerninhalte (Merkblatt, Karteikarten, Quiz, Probeprüfung) mit einem KI-Dienst (Claude von Anthropic oder ChatGPT von OpenAI) erstellen lassen und dafür ein Guthaben verwenden. Alternativ kann jede Person einen eigenen API-Schlüssel hinterlegen; dann wird nichts über das Guthaben abgerechnet.</p>
+      <h3>2. Aufladen und Zahlung</h3>
+      <p>Das Guthaben wird in Paketen zu CHF 5, 10 oder 20 per Karte aufgeladen. Die Zahlung wird von Stripe abgewickelt; Kartendaten werden nur bei Stripe eingegeben und sind für den Betreiber nicht einsehbar. Das Guthaben wird gutgeschrieben, sobald Stripe die Zahlung bestätigt.</p>
+      <h3>3. Preis</h3>
+      <p>Jede KI-Erstellung wird nach tatsächlichem Verbrauch abgerechnet: Kosten des KI-Anbieters (in USD, nach dessen Preisliste pro verarbeiteter Texteinheit) × 3, umgerechnet in CHF zum in der App angezeigten Kurs, aufgerundet auf den nächsten Rappen. Vor jeder Erstellung wird ein Höchstbetrag reserviert; der nicht verbrauchte Teil wird sofort zurückgebucht. Schlägt eine Erstellung fehl, wird nichts belastet. Jede Belastung ist in der App unter «Einstellungen» einsehbar. Preisänderungen gelten nur für Erstellungen nach ihrer Bekanntgabe in der App.</p>
+      <h3>4. Gültigkeit und Rückerstattung</h3>
+      <p>Das Guthaben verfällt nicht, ist an das Konto gebunden und nicht übertragbar. Nicht verbrauchtes Guthaben wird auf Anfrage per E-Mail an <span class="fill">[Kontakt-E-Mail]</span> zurückerstattet, auch bei der Löschung des Kontos. Eine Barauszahlung ist nicht möglich; die Rückerstattung erfolgt auf das bei der Zahlung verwendete Zahlungsmittel.</p>
+      <h3>5. KI-Inhalte</h3>
+      <p>Von der KI erstellte Inhalte können Fehler enthalten. Sie ersetzen weder Lehrmittel noch den Unterricht. Prüfe die Aussagen anhand der in der App verlinkten Unterlagen.</p>
+      <h3>6. Verfügbarkeit</h3>
+      <p>Der Betreiber bemüht sich um einen zuverlässigen Betrieb, kann aber keine ununterbrochene Verfügbarkeit der App oder der KI-Anbieter garantieren.</p>
+      <h3>7. Anwendbares Recht</h3>
+      <p>Es gilt schweizerisches Recht. Zwingende Bestimmungen zum Schutz von Konsumentinnen und Konsumenten, namentlich zum Gerichtsstand an deren Wohnsitz, bleiben vorbehalten.</p>
+    </section>
+
+    <section class="card" id="datenschutz">
+      <h2>Datenschutzerklärung</h2>
+      <p class="small muted">Stand: 25.11.2026 · nach dem Schweizer Datenschutzgesetz (DSG)</p>
+      <h3>Verantwortlich</h3>
+      <p><span class="fill">[Vorname Nachname]</span>, <span class="fill">[Adresse]</span>, E-Mail <span class="fill">[Kontakt-E-Mail]</span>.</p>
+      <h3>Welche Daten und wozu</h3>
+      <ul>
+        <li><strong>Konto:</strong> E-Mail-Adresse, Passwort (nur verschlüsselt), Vorname, Lehrjahr und Berufsfachschule – für Anmeldung und Begrüssung.</li>
+        <li><strong>Lerndaten:</strong> Fächer, Unterlagen, Karteikarten, Ergebnisse und Lernplan – damit du die App auf allen Geräten nutzen kannst.</li>
+        <li><strong>KI-Guthaben:</strong> Guthaben und Buchungen (Datum, Betrag, KI-Modell, Anzahl verarbeiteter Texteinheiten) – für die Abrechnung.</li>
+        <li><strong>Zahlungen:</strong> Abgewickelt von Stripe. Stripe erhält deine E-Mail-Adresse und Zahlungsdaten; der Betreiber erhält nur Betrag, Zeitpunkt und Zahlungsstatus.</li>
+        <li><strong>KI-Erstellung:</strong> Nur wenn du eine Erstellung mit KI ausdrücklich bestätigst, werden der Text der ausgewählten Unterlagen sowie Fach- und Themennamen an den gewählten KI-Anbieter übermittelt. Lernfortschritt, Ergebnisse und dein Name werden nicht übermittelt.</li>
+        <li><strong>Im Browser:</strong> Anmeldung, ein allenfalls hinterlegter eigener API-Schlüssel und noch nicht gespeicherter Lernfortschritt werden lokal im Browser gespeichert.</li>
+      </ul>
+      <p>Es gibt keine Werbung, kein Tracking und keine Weitergabe zu Werbezwecken.</p>
+      <h3>Dienstleister</h3>
+      <ul>
+        <li>Supabase – Datenbank und Anmeldung, Speicherort Zürich (Schweiz)</li>
+        <li>Vercel Inc. – Hosting der App (USA)</li>
+        <li>Stripe – Zahlungsabwicklung</li>
+        <li>Anthropic PBC (USA) bzw. OpenAI (USA) – nur bei bestätigten KI-Erstellungen</li>
+      </ul>
+      <p>Bei Übermittlungen in die USA stützen sich diese Anbieter auf anerkannte Garantien wie das Swiss-U.S. Data Privacy Framework oder Standardvertragsklauseln.</p>
+      <h3>Aufbewahrung</h3>
+      <p>Konto- und Lerndaten bleiben gespeichert, bis du das Konto löschen lässt. Buchungen werden so lange aufbewahrt, wie es gesetzliche Aufbewahrungspflichten verlangen.</p>
+      <h3>Deine Rechte</h3>
+      <p>Du kannst Auskunft über deine Daten verlangen, sie berichtigen oder löschen lassen und eine Kopie erhalten (in der App unter «Einstellungen → Sicherung herunterladen»). Anfragen an <span class="fill">[Kontakt-E-Mail]</span>.</p>
+    </section>
+  </main>
+  <script>
+    if (!document.querySelector('.fill')) document.getElementById('draft-note').remove();
+  </script>
+</body>
+</html>
