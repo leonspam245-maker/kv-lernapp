@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/unit.test.js",
+    "test": "node --test tests/unit.test.js tests/credits.test.js",
     "e2e": "node tests/e2e.mjs",
     "handy": "node server.js --handy",
     "beispiel-pdf": "python3 scripts/make-sample-pdf.py && python3 scripts/make-sample-docx.py",
@@ -22,6 +22,7 @@
     "@tesseract.js-data/deu": "^1.0.0",
     "openai": "^7.62.0",
     "pdfjs-dist": "^4.10.38",
+    "stripe": "^23.2.0",
     "tesseract.js": "^6.0.1"
   }
 }

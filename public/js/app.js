@@ -462,6 +462,18 @@ function sourceView(el, id, query) {
         await commit((d) => { d.settings.profile = { firstName: meta.firstName, apprenticeshipYear: meta.apprenticeshipYear || 1, school: meta.school || '' }; }).catch(() => {});
       }
       route();
+      // Rückkehr von der Zahlungsseite (Stripe)
+      const pay = new URLSearchParams(location.search).get('guthaben');
+      if (pay) {
+        history.replaceState(null, '', location.pathname + location.hash);
+        if (pay === 'ok') {
+          toast('Zahlung erfolgreich. Das Guthaben wird gutgeschrieben, sobald Stripe die Zahlung bestätigt (meist wenige Sekunden).');
+          if (location.hash.startsWith('#/einstellungen')) {
+            const { awaitTopup } = await import('./settings.js');
+            awaitTopup(view);
+          }
+        } else toast('Zahlung abgebrochen. Es wurde nichts belastet.', 'info');
+      }
     };
     if (!user) { loginView(view, start); return; }
     await start();

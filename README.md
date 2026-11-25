@@ -12,7 +12,7 @@ Die Lernapp läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentru
 
 Über «Konto einrichten» kann sich jede Person ein eigenes Konto anlegen. Jedes Konto sieht nur die eigenen Unterlagen und den eigenen Lernstand (Row Level Security in der Datenbank).
 
-Technik: `public/config.json` enthält die öffentliche Supabase-Adresse und den publishable Key (dieser Schlüssel ist für den Browser gedacht; geschützt wird über Anmeldung und Row Level Security). `vercel.json` und `scripts/build-vercel.mjs` steuern das Hosting, `api/` enthält die Vercel-Funktionen. Für den optionalen KI-Dienst ist bei Vercel nichts einzurichten: Jede Person hinterlegt ihren eigenen Schlüssel in der App.
+Technik: `public/config.json` enthält die öffentliche Supabase-Adresse und den publishable Key (dieser Schlüssel ist für den Browser gedacht; geschützt wird über Anmeldung und Row Level Security). `vercel.json` und `scripts/build-vercel.mjs` steuern das Hosting, `api/` enthält die Vercel-Funktionen. Für den optionalen KI-Dienst gibt es online zwei Wege: **Guthaben** (über Stripe aufgeladen, siehe unten) oder ein **eigener Schlüssel** der jeweiligen Person.
 
 ## Lokal starten (ohne Internet, mit lokalem Konto)
 
@@ -75,6 +75,22 @@ Lernplan, Import, Karteikarten sowie Merkblatt, Quiz und Probeprüfung funktioni
 2. In der App unter **Einstellungen** Claude oder ChatGPT wählen, den Schlüssel eintragen und den Dienst bewusst aktivieren.
 3. Der Schlüssel bleibt nur im eigenen Browser (pro Konto, wahlweise nur bis zum Schliessen des Browsers). Er wird weder in den Lerndaten, in der Datenbank noch auf dem Server gespeichert, sondern nur bei einer bestätigten Erstellung an den Anbieter weitergereicht. Auf einem weiteren Gerät wird er dort erneut eingetragen.
 
+### KI-Guthaben über Stripe (nur online)
+
+Statt eines eigenen Schlüssels können Personen Guthaben per Karte aufladen (CHF 5, 10 oder 20). Jede KI-Erstellung läuft dann über den Schlüssel des Betreibers und wird nach tatsächlichem Verbrauch abgerechnet: **Anbieterkosten × 3**, umgerechnet mit 0.85 CHF pro USD. Vor jeder Erstellung wird ein Höchstbetrag reserviert (bei Claude rund CHF 1.80); der nicht verbrauchte Teil kommt sofort zurück, eine fehlgeschlagene Erstellung kostet nichts. Guthaben und Buchungen liegen in Supabase (`ai_credit`, `ai_ledger`); Konten können sie nur lesen, ändern können sie nur die Server-Funktionen mit dem Server-Kennwort.
+
+Einrichtung bei Vercel (Settings → Environment Variables, Typ «Sensitive», danach Redeploy):
+
+| Variable | Inhalt |
+|---|---|
+| `ANTHROPIC_API_KEY` und/oder `OPENAI_API_KEY` | Schlüssel des Betreibers für Claude bzw. ChatGPT |
+| `STRIPE_SECRET_KEY` | Geheimer Stripe-Schlüssel (`sk_test_…` zum Testen, später `sk_live_…`) |
+| `STRIPE_WEBHOOK_SECRET` | Signatur-Secret des Webhooks (`whsec_…`) |
+| `CREDITS_SERVER_SECRET` | bereits eingerichtet (Hash in Supabase) |
+| optional `AI_MARKUP`, `USD_CHF`, `CLAUDE_PRICE_IN/OUT`, `OPENAI_PRICE_IN/OUT` | Faktor (Standard 3), Kurs (0.85) und Anbieterpreise in USD pro Million Tokens |
+
+Bei Stripe unter Developers → Webhooks einen Endpunkt `https://kv-lernapp.vercel.app/api/stripe/webhook` mit den Ereignissen `checkout.session.completed` und `checkout.session.async_payment_succeeded` anlegen. Erst wenn alle drei Stripe-/Kennwort-Variablen gesetzt sind, zeigt die App das Guthaben an.
+
 Übertragen werden nur die ausgewählten Unterlagen, und erst nach einer Bestätigung pro Erstellung.
 
 ## Tests
@@ -89,12 +105,14 @@ npm run e2e
 
 `npm run e2e:cloud` prüft den Online-Betrieb (Anmeldung, Cloud-Speicher, Konflikte, Installierbarkeit) mit einem nachgebauten Supabase.
 
-`npm test` prüft die Lernplan-, Wiederholungs- und Generatorlogik. `npm run e2e` braucht Playwright mit Chromium. Der Test spielt alle vier Importwege (inklusive Word-Datei), Merkblatt, Quiz, Probeprüfung, Lernplan, Karteikarten, Registrierung und Anmeldung mit zwei Konten, einen Neustart, zwei gleichzeitig genutzte Geräte und die Handy-Ansicht mit den Beispieldateien aus `samples/` durch. Er verwendet einen eigenen Datenordner (`test-data/`) und legt Screenshots in `screenshots/` ab.
+`npm test` prüft die Lernplan-, Wiederholungs- und Generatorlogik sowie die Abrechnung über Guthaben (Preis, Reservation, Stripe-Signatur, keine doppelte Gutschrift). `npm run e2e` braucht Playwright mit Chromium. Der Test spielt alle vier Importwege (inklusive Word-Datei), Merkblatt, Quiz, Probeprüfung, Lernplan, Karteikarten, Registrierung und Anmeldung mit zwei Konten, einen Neustart, zwei gleichzeitig genutzte Geräte und die Handy-Ansicht mit den Beispieldateien aus `samples/` durch. Er verwendet einen eigenen Datenordner (`test-data/`) und legt Screenshots in `screenshots/` ab.
 
 ## Aufbau
 
 - `server.js`: lokaler Server ohne Framework (Dateien, Speicherung, KI-Weiterleitung)
-- `server/ai.js`: optionale Anbindung an Claude oder ChatGPT mit dem persönlichen Schlüssel der jeweiligen Person
+- `server/ai.js`: optionale Anbindung an Claude oder ChatGPT (eigener Schlüssel oder Guthaben)
+- `server/credits.js`: Preisberechnung für das KI-Guthaben
+- `api/credits/checkout.js`, `api/stripe/webhook.js`: Aufladen über Stripe und Gutschrift
 - `public/js/aikeys.js`: persönlicher KI-Schlüssel im Browser
 - `server/local-auth.js`: lokale Konten und Anmeldung
 - `public/js/planner.js`: Lernplan-Berechnung

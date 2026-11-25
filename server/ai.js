@@ -4,6 +4,7 @@
 // Ein gemeinsamer Server-Schlüssel wird bewusst nicht verwendet.
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { creditStatus, MAX_OUTPUT_TOKENS } from './credits.js';
 
 const MODEL = () => process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const OPENAI_MODEL = () => process.env.OPENAI_MODEL || 'gpt-6.1-sol';
@@ -13,7 +14,7 @@ export function aiStatus() {
   const claude = { configured: true, personalKey: true, model: MODEL(), provider: 'Anthropic (Claude API)' };
   const chatgpt = { configured: true, personalKey: true, model: OPENAI_MODEL(), provider: 'OpenAI (ChatGPT API)' };
   // configured/model/provider bleiben für ältere App-Versionen erhalten (Claude)
-  return { ...claude, providers: { claude, chatgpt } };
+  return { ...claude, providers: { claude, chatgpt }, credits: creditStatus() };
 }
 
 const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
@@ -102,12 +103,19 @@ export function personalKey(provider, raw) {
   return key;
 }
 
-export async function generateWithAi({ provider = 'claude', apiKey, ...request }) {
+/**
+ * billed = true: Anfrage mit dem Schlüssel des Betreibers, abgerechnet über das Guthaben der Person.
+ * Dann wird kein Ausweichmodell verwendet, damit der Preis dem gewählten Modell entspricht.
+ */
+export async function generateWithAi({ provider = 'claude', apiKey, billed = false, ...request }) {
   const p = provider === 'chatgpt' ? 'chatgpt' : 'claude';
-  const key = personalKey(p, apiKey);
+  const key = billed ? String(apiKey || '') : personalKey(p, apiKey);
+  if (!key) throw Object.assign(new Error('Für diesen KI-Dienst ist auf dem Server kein Zugang eingerichtet.'), { status: 503 });
   if (p === 'chatgpt') return generateWithOpenAi(request, key);
-  return generateWithClaude(request, key);
+  return generateWithClaude(request, key, billed);
 }
+/** Grösse der Unterlagen für die Schätzung der Reservation. */
+export const requestChars = (request) => JSON.stringify(request?.sources || []).length + JSON.stringify(request?.topics || []).length;
 
 function buildPrompt({ subjectName, topics, sources }) {
   const topicList = (topics || []).map((t) => `- ${t.name} (ID: ${t.id})`).join('\n');
@@ -128,6 +136,7 @@ async function generateWithOpenAi(request, apiKey) {
     completion = await client.chat.completions.create({
       model: OPENAI_MODEL(),
       messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: buildPrompt(request)(type) }],
+      max_completion_tokens: MAX_OUTPUT_TOKENS,
       response_format: { type: 'json_schema', json_schema: { name: `lernapp_${type}`, strict: true, schema: SCHEMAS[type] } },
     });
   } catch (e) {
@@ -142,13 +151,13 @@ async function generateWithOpenAi(request, apiKey) {
   if (choice?.message?.refusal) throw Object.assign(new Error('ChatGPT hat die Anfrage abgelehnt.'), { status: 422 });
   if (choice?.finish_reason === 'length') throw Object.assign(new Error('Die Antwort war zu lang. Bitte weniger Unterlagen auswählen.'), { status: 422 });
   try {
-    return { data: JSON.parse(choice.message.content), model: completion.model, provider: 'chatgpt' };
+    return { data: JSON.parse(choice.message.content), model: completion.model, provider: 'chatgpt', usage: { input: completion.usage?.prompt_tokens || 0, output: completion.usage?.completion_tokens || 0 } };
   } catch {
     throw Object.assign(new Error('Die Antwort von ChatGPT war nicht lesbar. Bitte erneut versuchen.'), { status: 502 });
   }
 }
 
-async function generateWithClaude({ type, subjectName, topics, sources }, apiKey) {
+async function generateWithClaude({ type, subjectName, topics, sources }, apiKey, billed = false) {
   if (!SCHEMAS[type]) throw Object.assign(new Error('Unbekannter Inhaltstyp.'), { status: 400 });
   if (!Array.isArray(sources) || !sources.length) throw Object.assign(new Error('Keine Unterlagen ausgewählt.'), { status: 400 });
 
@@ -160,9 +169,8 @@ async function generateWithClaude({ type, subjectName, topics, sources }, apiKey
   try {
     const stream = client.beta.messages.stream({
       model: MODEL(),
-      max_tokens: 32000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      max_tokens: MAX_OUTPUT_TOKENS,
+      ...(billed ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }),
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMAS[type] } },
       system: SYSTEM,
       messages: [{ role: 'user', content: user }],
@@ -179,7 +187,7 @@ async function generateWithClaude({ type, subjectName, topics, sources }, apiKey
   if (message.stop_reason === 'max_tokens') throw Object.assign(new Error('Die Antwort war zu lang. Bitte weniger Unterlagen auswählen.'), { status: 422 });
   const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   try {
-    return { data: JSON.parse(text), model: message.model, usage: message.usage };
+    return { data: JSON.parse(text), model: message.model, provider: 'claude', usage: { input: (message.usage?.input_tokens || 0) + (message.usage?.cache_creation_input_tokens || 0) + (message.usage?.cache_read_input_tokens || 0), output: message.usage?.output_tokens || 0 } };
   } catch {
     throw Object.assign(new Error('Die KI-Antwort war nicht lesbar. Bitte erneut versuchen.'), { status: 502 });
   }

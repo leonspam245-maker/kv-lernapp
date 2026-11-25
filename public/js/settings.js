@@ -4,7 +4,8 @@ import { esc, fmtDateTime, todayISO, plural } from './util.js';
 import { toast, confirmDialog } from './ui.js';
 import { rerender } from './app.js';
 import { buildDemoData } from './demo.js';
-import { isCloud, signOut } from './backend.js';
+import { isCloud, signOut, getCredits, startCheckout } from './backend.js';
+import { creditsInfo, creditsAvailable, billingMode, aiAccess, chf } from './billing.js';
 import { getAiKey, setAiKey, removeAiKey, isRemembered, maskKey } from './aikeys.js';
 
 export function settingsView(el) {
@@ -24,7 +25,12 @@ export function settingsView(el) {
   };
   const P = PROVIDERS[provider];
   const myKey = getAiKey(provider);
-  const configured = Boolean(myKey);
+  const billing = billingMode();
+  const ci = creditsInfo();
+  const configured = aiAccess(provider);
+  // Kostenbeispiel im Guthaben-Modus: Merkblatt aus rund 10 Seiten
+  const est = provider === 'chatgpt' ? [0.05, 0.15] : [0.10, 0.30];
+  const estChf = est.map((u) => (u * (ci.usdChf || 0.85) * (ci.markup || 3)).toFixed(2));
   const demoCount = db.subjects.filter((s) => s.demo).length;
   const pr = db.settings.profile || {};
   el.innerHTML = `<div class="page-head"><div><h1>Einstellungen</h1></div></div>
@@ -50,10 +56,22 @@ export function settingsView(el) {
       <li>Nicht übertragen werden: Lernfortschritt, Quizergebnisse, Lernplan, andere Unterlagen, dein Name.</li>
       <li>Die Daten gehen an ${P.name} von ${P.company} (USA). Details: <a href="${P.privacy}" target="_blank" rel="noopener">Datenschutz von ${P.company}</a>.</li>
     </ul>
-    <h3>Entstehen Kosten?</h3>
-    <p>Ja, sobald du den Dienst nutzt. Die API von ${P.company} wird pro Nutzung abgerechnet und braucht ein eigenes Konto mit Guthaben; ${P.subscription} deckt die API nicht ab. Mit dem eingestellten Modell <code>${esc(P.model)}</code> (Listenpreis ${P.price}) kostet ein Merkblatt aus rund 10 Seiten ungefähr ${P.estimate}. Den genauen Preis zeigt <a href="${P.pricing}" target="_blank" rel="noopener">${P.pricingLabel}</a>; Beträge in CHF sind ungefähr.</p>
+    ${billing === 'own' ? `<h3>Entstehen Kosten?</h3>
+    <p>Ja, sobald du den Dienst nutzt. Die API von ${P.company} wird pro Nutzung abgerechnet und braucht ein eigenes Konto mit Guthaben; ${P.subscription} deckt die API nicht ab. Mit dem eingestellten Modell <code>${esc(P.model)}</code> (Listenpreis ${P.price}) kostet ein Merkblatt aus rund 10 Seiten ungefähr ${P.estimate}. Den genauen Preis zeigt <a href="${P.pricing}" target="_blank" rel="noopener">${P.pricingLabel}</a>; Beträge in CHF sind ungefähr.</p>` : ''}
+    ${creditsAvailable() ? `<div class="field"><span class="eyebrow">Bezahlung</span>
+      <div class="tabs" role="radiogroup" aria-label="Bezahlung">${[['credit', 'Guthaben'], ['own', 'Eigener Schlüssel']].map(([k, l]) => `<button type="button" role="radio" data-billing="${k}" aria-selected="${billing === k}" aria-checked="${billing === k}">${l}</button>`).join('')}</div></div>` : ''}
+    ${billing === 'credit' ? `
+    <h3>Guthaben</h3>
+    <p>Du bezahlst die KI-Nutzung mit Guthaben, das du per Karte (Stripe) auflädst. Abgerechnet wird pro Erstellung nach tatsächlichem Verbrauch: <strong>Anbieterkosten × ${ci.markup}</strong>, umgerechnet mit ${ci.usdChf} CHF pro USD. Ein Merkblatt aus rund 10 Seiten kostet so etwa CHF ${estChf[0]}–${estChf[1]}. Vor jeder Erstellung wird ein Höchstbetrag reserviert; was nicht verbraucht wird, kommt sofort zurück. Schlägt eine Erstellung fehl, kostet sie nichts.</p>
+    ${ci.providers?.[provider] ? '' : `<div class="notice notice-warn">Für ${P.name} ist noch kein Guthaben-Zugang eingerichtet. Wähle den anderen Anbieter oder nutze einen eigenen Schlüssel.</div>`}
+    <div class="credit-box">
+      <div><span class="eyebrow">Dein Guthaben</span><div class="big-number" id="credit-balance">…</div></div>
+      <div class="row">${(ci.packs || []).map((a) => `<button type="button" class="btn" data-pack="${a}">${chf(a)} aufladen</button>`).join('')}</div>
+    </div>
+    <p class="small muted">Bezahlung über Stripe. Die Kartendaten gibst du nur bei Stripe ein; die Lernapp sieht sie nie. Das Guthaben gilt nur für KI-Erstellungen in dieser App.</p>
+    <div id="credit-ledger"></div>` : `
     <h3>Dein eigener Schlüssel</h3>
-    <p>Jede Person nutzt ihren eigenen KI-Zugang und bezahlt nur ihre eigene Nutzung. Es gibt keinen gemeinsamen Schlüssel.</p>
+    <p>Mit einem eigenen Schlüssel bezahlst du direkt beim Anbieter, ohne Guthaben in der Lernapp.</p>
     <ol>
       <li>Auf <a href="${P.console}" target="_blank" rel="noopener">${P.consoleLabel}</a> ein Konto erstellen, Guthaben aufladen und einen API-Schlüssel anlegen.</li>
       <li>Den Schlüssel hier eintragen. Er bleibt <strong>nur in diesem Browser</strong> (für dein Konto) und wird weder in deinen Lerndaten noch auf dem Server gespeichert. Er wird nur bei einer bestätigten KI-Erstellung über ${isCloud() ? 'den Lernapp-Server' : 'deinen Lernapp-Server'} an ${P.company} weitergereicht.</li>
@@ -65,11 +83,11 @@ export function settingsView(el) {
           <div class="field" style="flex:1;min-width:220px;margin:0"><label for="key-input">API-Schlüssel für ${P.name}</label><input type="password" id="key-input" autocomplete="off" spellcheck="false" placeholder="${provider === 'claude' ? 'sk-ant-…' : 'sk-…'}"></div>
           <button class="btn btn-primary" id="key-save">Schlüssel speichern</button>
           <label class="check" style="flex-basis:100%;padding-top:0"><input type="checkbox" id="key-remember" checked> Auf diesem Gerät merken</label>
-        </form>`}
-    <div class="notice ${configured ? 'notice-ok' : 'notice-warn'}">Status: ${configured ? `Dein Schlüssel für ${P.name} ist hinterlegt.` : `Kein eigener Schlüssel für ${P.name} hinterlegt – KI-Funktionen sind nicht verfügbar.`} ${consent ? `KI-Dienst (${P.name}) aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
+        </form>`}`}
+    <div class="notice ${configured ? 'notice-ok' : 'notice-warn'}">Status: ${billing === 'credit' ? (configured ? `Abrechnung über dein Guthaben (${P.name}).` : `${P.name} ist mit Guthaben nicht verfügbar.`) : configured ? `Dein Schlüssel für ${P.name} ist hinterlegt.` : `Kein eigener Schlüssel für ${P.name} hinterlegt – KI-Funktionen sind nicht verfügbar.`} ${consent ? `KI-Dienst (${P.name}) aktiviert am ${fmtDateTime(db.settings.aiConsentAt)}.` : 'KI-Dienst nicht aktiviert.'}</div>
     ${consent
       ? '<button class="btn btn-danger" id="ai-off">KI-Dienst deaktivieren</button>'
-      : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte an ${P.name} übertragen werden und dass Kosten entstehen.</label>
+      : `<label class="check"><input type="checkbox" id="ai-ack"> Ich habe verstanden, welche Inhalte an ${P.name} übertragen werden und dass Kosten entstehen${billing === 'credit' ? ', die von meinem Guthaben abgezogen werden' : ''}.</label>
          <button class="btn btn-primary" id="ai-on" ${configured ? '' : 'disabled'}>KI-Dienst aktivieren</button>`}
   </section>
 
@@ -124,6 +142,16 @@ export function settingsView(el) {
       toast(`${PROVIDERS[next].name} gewählt. Aktiviere den Dienst, um ihn zu nutzen.`, 'info'); rerender();
     } catch (e) { toast(e.message, 'error'); }
   }));
+  el.querySelectorAll('[data-billing]').forEach((b) => b.addEventListener('click', async () => {
+    if (b.dataset.billing === billing) return;
+    try { await commit((d) => { d.settings.aiBilling = b.dataset.billing; }); rerender(); } catch (e) { toast(e.message, 'error'); }
+  }));
+  el.querySelectorAll('[data-pack]').forEach((b) => b.addEventListener('click', async () => {
+    el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = true));
+    try { location.href = await startCheckout(Number(b.dataset.pack)); }
+    catch (e) { toast(e.message, 'error'); el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = false)); }
+  }));
+  if (billing === 'credit') loadCredits(el);
   el.querySelector('#key-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const input = el.querySelector('#key-input');
@@ -184,4 +212,33 @@ export function settingsView(el) {
       toast('Beispieldaten entfernt.'); rerender();
     } catch (e) { toast(e.message, 'error'); }
   });
+}
+
+const KIND = { topup: 'Aufgeladen', usage: 'KI-Erstellung', cancelled: 'Storniert (Fehler, nicht belastet)', correction: 'Korrektur' };
+async function loadCredits(el) {
+  const out = el.querySelector('#credit-balance');
+  try {
+    const c = await getCredits();
+    if (!out.isConnected) return;
+    out.textContent = chf(c.balance);
+    el.querySelector('#credit-ledger').innerHTML = c.ledger.length
+      ? `<h3>Letzte Buchungen</h3><div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th style="text-align:right">Betrag</th></tr></thead><tbody>${c.ledger.map((l) => `<tr><td>${fmtDateTime(l.created_at)}</td><td>${KIND[l.kind] || l.kind}${l.model ? ` <span class="small muted">${esc(l.model)}</span>` : ''}</td><td style="text-align:right">${l.amount_rappen > 0 ? '+' : ''}${chf(l.amount_rappen)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="small muted">Noch keine Buchungen.</p>';
+    return c.balance;
+  } catch (e) { out.textContent = '–'; toast(e.message, 'error'); return null; }
+}
+/** Nach der Rückkehr von Stripe: Guthaben einige Male neu laden, bis die Gutschrift der letzten Minuten da ist. */
+export async function awaitTopup(el) {
+  const since = Date.now() - 15 * 60000;
+  for (let i = 0; i < 10; i++) {
+    if (!el.querySelector('#credit-balance')) return;
+    const c = await getCredits().catch(() => null);
+    if (c?.ledger.some((l) => l.kind === 'topup' && Date.parse(l.created_at) > since)) {
+      await loadCredits(el);
+      toast(`Guthaben gutgeschrieben: jetzt ${chf(c.balance)}.`);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  toast('Die Gutschrift ist noch nicht eingetroffen. Lade die Seite in einer Minute neu.', 'info');
 }

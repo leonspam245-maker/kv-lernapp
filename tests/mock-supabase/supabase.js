@@ -37,6 +37,14 @@
     return {
       auth,
       from(table) {
+        // KI-Guthaben (nur lesen, wie mit Row Level Security): db.credits[konto] = { balance, ledger: [] }
+        if (table === 'ai_credit' || table === 'ai_ledger') {
+          const credit = () => load().credits?.[uid()] || { balance: 0, ledger: [] };
+          if (table === 'ai_credit') return { select() { return { async maybeSingle() { await delay(); return { data: uid() ? { balance_rappen: credit().balance } : null, error: null }; } }; } };
+          const q = { select() { return q; }, neq() { return q; }, order() { return q; }, limit() { return q; },
+            then(resolve) { delay().then(() => resolve({ data: uid() ? [...credit().ledger].reverse() : [], error: null })); } };
+          return q;
+        }
         if (table !== 'app_state') throw new Error('unbekannte Tabelle');
         return {
           select(cols) {

@@ -88,6 +88,27 @@ export async function accessToken() {
   return data.session?.access_token || null;
 }
 
+// ---------- KI-Guthaben (nur online) ----------
+export async function getCredits() {
+  if (!isCloud()) return null;
+  const [bal, led] = await Promise.all([
+    sb.from('ai_credit').select('balance_rappen').maybeSingle(),
+    sb.from('ai_ledger').select('kind, amount_rappen, provider, model, created_at').neq('kind', 'hold').order('created_at', { ascending: false }).limit(8),
+  ]);
+  if (bal.error || led.error) throw new Error('Das Guthaben konnte nicht geladen werden.');
+  return { balance: bal.data?.balance_rappen || 0, ledger: led.data || [] };
+}
+/** Zahlungsseite bei Stripe öffnen (liefert deren Adresse). */
+export async function startCheckout(amount) {
+  const token = await accessToken();
+  let res;
+  try { res = await fetch('/api/credits/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ amount }) }); }
+  catch { throw new Error('Keine Verbindung. Bitte Internetverbindung prüfen.'); }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.url) throw new Error(body.error || 'Die Zahlungsseite konnte nicht geöffnet werden.');
+  return body.url;
+}
+
 // ---------- Daten ----------
 /** Aktueller Stand: { version, data } */
 export async function getState() {

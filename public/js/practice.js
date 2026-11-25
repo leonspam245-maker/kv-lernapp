@@ -6,13 +6,14 @@ import { buildMerkblatt, buildCards, buildQuestions, grade, swissGrade } from '.
 import { newCard, rateCard, sessionQueue, REINSERT_AFTER } from './srs.js';
 import { rerender } from './app.js';
 import { accessToken } from './backend.js';
-import { getAiKey, hasAiKey } from './aikeys.js';
+import { getAiKey } from './aikeys.js';
+import { billingMode, aiAccess, chf } from './billing.js';
 
 const TYPE = { merkblatt: 'Merkblatt', quiz: 'Quiz', exam: 'Probeprüfung' };
 /** Gewählter KI-Anbieter: Claude (Anthropic) oder ChatGPT (OpenAI) */
 export const AI_PROVIDERS = { claude: { name: 'Claude', company: 'Anthropic' }, chatgpt: { name: 'ChatGPT', company: 'OpenAI' } };
 const aiProvider = () => (store.db.settings.aiProvider === 'chatgpt' ? 'chatgpt' : 'claude');
-const aiConfigured = (p = aiProvider()) => hasAiKey(p); // eigener Schlüssel dieser Person
+const aiConfigured = (p = aiProvider()) => aiAccess(p); // Guthaben oder eigener Schlüssel dieser Person
 const aiReady = () => aiConfigured() && store.db.settings.aiConsent;
 
 // ---------- Auswahl & Erstellung ----------
@@ -39,7 +40,7 @@ export function practiceView(el, _id, query) {
     <section class="card">
       <div class="eyebrow">Erstellen mit</div>
       <label class="check"><input type="radio" name="engine" value="lokal" checked> <span><strong>Lokal aus den Unterlagen</strong><br><span class="small muted">Funktioniert ohne Internet. Übernimmt Begriffe, Erklärungen, Tabellen und Beispiele direkt aus den Quellen.</span></span></label>
-      <label class="check"><input type="radio" name="engine" value="ki" ${aiReady() ? '' : 'disabled'}> <span><strong>Mit KI (${AI_PROVIDERS[aiProvider()].name})</strong><br><span class="small muted">${aiReady() ? `Formuliert verständlicher und ergänzt gekennzeichnete eigene Beispiele. Die gewählten Unterlagen werden an ${AI_PROVIDERS[aiProvider()].company} übertragen; abgerechnet wird über deinen eigenen Schlüssel.` : 'Nicht aktiviert. Einrichtung und Hinweise unter <a href="#/einstellungen">Einstellungen</a>.'}</span></span></label>
+      <label class="check"><input type="radio" name="engine" value="ki" ${aiReady() ? '' : 'disabled'}> <span><strong>Mit KI (${AI_PROVIDERS[aiProvider()].name})</strong><br><span class="small muted">${aiReady() ? `Formuliert verständlicher und ergänzt gekennzeichnete eigene Beispiele. Die gewählten Unterlagen werden an ${AI_PROVIDERS[aiProvider()].company} übertragen; abgerechnet wird ${billingMode() === 'credit' ? 'über dein Guthaben nach Verbrauch' : 'über deinen eigenen Schlüssel'}.` : 'Nicht aktiviert. Einrichtung und Hinweise unter <a href="#/einstellungen">Einstellungen</a>.'}</span></span></label>
       <div class="grid grid-2" style="margin-top:14px">
         <button class="btn btn-primary" data-make="merkblatt">Merkblatt erstellen</button>
         <button class="btn btn-primary" data-make="cards">Karteikarten erstellen</button>
@@ -87,7 +88,7 @@ const attemptsOf = (contentId) => store.db.attempts.filter((a) => a.contentId ==
 async function callAi(type, sources, subjectId) {
   const topicIds = [...new Set(sources.map((s) => s.topicId))];
   const chars = sources.reduce((n, s) => n + (s.pages?.reduce((m, p) => m + (p.text?.length || 0), 0) || 0) + (s.content?.length || 0) + (s.cards?.reduce((m, c) => m + c.term.length + c.def.length, 0) || 0), 0);
-  const ok = await confirmDialog(`${plural(sources.length, 'Unterlage', 'Unterlagen')} (ca. ${chars.toLocaleString('de-CH')} Zeichen) werden an ${AI_PROVIDERS[aiProvider()].name} (${AI_PROVIDERS[aiProvider()].company}) übertragen, um ${TYPE[type] || 'Karteikarten'} zu erstellen. Lernfortschritt und andere Unterlagen werden nicht übertragen. Fortfahren?`, { ok: 'Übertragen und erstellen' });
+  const ok = await confirmDialog(`${plural(sources.length, 'Unterlage', 'Unterlagen')} (ca. ${chars.toLocaleString('de-CH')} Zeichen) werden an ${AI_PROVIDERS[aiProvider()].name} (${AI_PROVIDERS[aiProvider()].company}) übertragen, um ${TYPE[type] || 'Karteikarten'} zu erstellen.${billingMode() === 'credit' ? ' Die Kosten werden nach Verbrauch von deinem Guthaben abgezogen.' : ''} Lernfortschritt und andere Unterlagen werden nicht übertragen. Fortfahren?`, { ok: 'Übertragen und erstellen' });
   if (!ok) throw new Error('Abgebrochen – es wurde nichts übertragen.');
   const payload = {
     type,
@@ -99,16 +100,18 @@ async function callAi(type, sources, subjectId) {
       content: s.cards?.length ? s.cards.map((c) => `${c.term}: ${c.def}`).join('\n') : s.content,
     })),
   };
-  const aiKey = getAiKey(aiProvider());
-  if (!aiKey) throw new Error('Kein eigener API-Schlüssel hinterlegt. Trage ihn unter «Einstellungen» ein.');
+  const credit = billingMode() === 'credit';
+  const aiKey = credit ? '' : getAiKey(aiProvider());
+  if (!credit && !aiKey) throw new Error('Kein eigener API-Schlüssel hinterlegt. Trage ihn unter «Einstellungen» ein.');
   let res;
   try {
     const token = await accessToken();
-    res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AI-Key': aiKey, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) });
+    res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(aiKey ? { 'X-AI-Key': aiKey } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) });
   }
   catch { throw new Error('Keine Verbindung zum Lernapp-Server.'); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `KI-Anfrage fehlgeschlagen (${res.status}).`);
+  if (body.billing) toast(`KI-Kosten: ${chf(body.billing.charged)} · Guthaben: ${chf(body.billing.balance)}`, 'info');
   // Verweise und Themen absichern
   const valid = new Set(sources.map((s) => s.id));
   const fixRefs = (refs) => (refs || []).filter((r) => valid.has(r.sourceId)).map((r) => ({ sourceId: r.sourceId, page: r.page ?? null }));

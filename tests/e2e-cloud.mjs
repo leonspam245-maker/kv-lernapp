@@ -20,7 +20,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const DATA_DIR = path.join(ROOT, 'test-data', 'cloud');
 fs.rmSync(DATA_DIR, { recursive: true, force: true });
 
-const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR, MOCK_SUPABASE: '1' }, stdio: 'pipe' });
+const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR, MOCK_SUPABASE: '1', STRIPE_SECRET_KEY: 'sk_test_dummy', STRIPE_WEBHOOK_SECRET: 'whsec_dummy', CREDITS_SERVER_SECRET: 'test', ANTHROPIC_API_KEY: 'sk-ant-betreiber-dummy', OPENAI_API_KEY: '' }, stdio: 'pipe' });
 for (let i = 0; i < 50; i++) { try { if ((await fetch(BASE + '/api/status')).ok) break; } catch { /* warten */ } await new Promise((r) => setTimeout(r, 100)); }
 
 const results = [];
@@ -164,6 +164,51 @@ try {
     const names = (await mockState()).rows.u1.data.subjects.map((s) => s.name).sort();
     assert.deepEqual(names, ['Englisch', 'IKA', 'W&G (Beispiel)']);
     await p2.close();
+  });
+
+  await check('KI-Guthaben: anzeigen, über Stripe aufladen, KI ohne eigenen Schlüssel nutzen und Kosten sehen', async () => {
+    await page.goto(BASE + '/#/einstellungen');
+    await page.waitForSelector('#credit-balance:not(:has-text("…"))');
+    assert.equal(await page.getAttribute('[data-billing="credit"]', 'aria-checked'), 'true', 'Guthaben ist Standard');
+    assert.equal(await page.innerText('#credit-balance'), 'CHF 0.00');
+    const text = await page.innerText('main');
+    assert.match(text, /Anbieterkosten × 3/);
+    assert.match(text, /CHF 5\.00 aufladen[\s\S]*CHF 10\.00 aufladen[\s\S]*CHF 20\.00 aufladen/);
+    // ChatGPT hat keinen Guthaben-Zugang (kein Schlüssel des Betreibers)
+    await page.click('[data-provider="chatgpt"]');
+    await page.waitForSelector('.notice-warn:has-text("kein Guthaben-Zugang")');
+    await page.click('[data-provider="claude"]');
+    await page.waitForSelector('[data-provider="claude"][aria-checked="true"]');
+    // Aufladen: Zahlungsseite (nachgebaut), Stripe bestätigt, Rückkehr in die App
+    let checkoutBody = null; let checkoutAuth = null;
+    await page.route('**/api/credits/checkout', async (rt) => {
+      checkoutBody = rt.request().postDataJSON(); checkoutAuth = rt.request().headers().authorization;
+      await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('mock-supabase')); s.credits = { u1: { balance: 1000, ledger: [{ kind: 'topup', amount_rappen: 1000, created_at: new Date().toISOString() }] } }; localStorage.setItem('mock-supabase', JSON.stringify(s)); });
+      await rt.fulfill({ json: { url: BASE + '/?guthaben=ok#/einstellungen' } });
+    });
+    await page.click('[data-pack="1000"]');
+    await page.waitForSelector('.toast:has-text("Guthaben gutgeschrieben: jetzt CHF 10.00")', { timeout: 20000 });
+    assert.equal(checkoutBody.amount, 1000);
+    assert.match(checkoutAuth, /^Bearer /);
+    assert.equal(new URL(page.url()).search, '', 'Rückkehr-Hinweis aus der Adresse entfernt');
+    assert.match(await page.innerText('#credit-ledger'), /Aufgeladen[\s\S]*\+CHF 10\.00/);
+    await page.screenshot({ path: path.join(SHOTS, 'cloud-guthaben.png'), fullPage: true });
+    // Aktivieren und eine KI-Erstellung über das Guthaben
+    await page.check('#ai-ack'); await page.click('#ai-on'); await page.waitForSelector('#ai-off');
+    let aiHeaders = null;
+    await page.route('**/api/ai/generate', async (rt) => {
+      aiHeaders = rt.request().headers();
+      await rt.fulfill({ json: { data: { questions: [{ type: 'mc', topicId: 'x', prompt: '[KI-Test] Frage', options: ['A', 'B'], answer: 0, answerBool: null, pairs: null, model: null, keywords: null, explanation: 'E', points: 1, refs: [], uncertain: null }] }, model: 'claude-opus-5-5', billing: { charged: 23, balance: 977 } } });
+    });
+    await page.goto(BASE + '/#/ueben'); await page.waitForSelector('[data-make="quiz"]');
+    assert.match(await page.innerText('main'), /über dein Guthaben nach Verbrauch/);
+    await page.check('input[name=engine][value=ki]');
+    await page.click('[data-make="quiz"]');
+    assert.match(await page.innerText('.dialog'), /von deinem Guthaben abgezogen/);
+    await page.click('.dialog button[value=yes]');
+    await page.waitForSelector('.toast:has-text("KI-Kosten: CHF 0.23 · Guthaben: CHF 9.77")');
+    assert.equal(aiHeaders['x-ai-key'], undefined, 'kein eigener Schlüssel nötig');
+    await page.unroute('**/api/ai/generate'); await page.unroute('**/api/credits/checkout');
   });
 
   await check('Installierbar: Manifest, Symbole und Service Worker', async () => {
