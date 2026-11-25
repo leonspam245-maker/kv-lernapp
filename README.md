@@ -4,6 +4,8 @@ Persönliche Lernapp für die KV-Lehre: Unterlagen pro Fach und Thema sammeln, m
 
 ## Online nutzen (empfohlen)
 
+Adresse: **https://kv-learn.app** (die alte Adresse https://kv-lernapp.vercel.app funktioniert weiterhin).
+
 Die Lernapp läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentrum Zürich). Du meldest dich mit E-Mail und Passwort an und kannst die App auf Handy und Computer als App installieren:
 
 - **iPhone (Safari):** Teilen-Symbol, dann «Zum Home-Bildschirm».
@@ -89,7 +91,7 @@ Einrichtung bei Vercel (Settings → Environment Variables, Typ «Sensitive», d
 | `CREDITS_SERVER_SECRET` | bereits eingerichtet (Hash in Supabase) |
 | optional `AI_MARKUP`, `USD_CHF`, `CLAUDE_PRICE_IN/OUT`, `OPENAI_PRICE_IN/OUT` | Faktor (Standard 3), Kurs (0.85) und Anbieterpreise in USD pro Million Tokens |
 
-Bei Stripe unter Developers → Webhooks einen Endpunkt `https://kv-lernapp.vercel.app/api/stripe/webhook` mit den Ereignissen `checkout.session.completed` und `checkout.session.async_payment_succeeded` anlegen. Erst wenn alle drei Stripe-/Kennwort-Variablen gesetzt sind, zeigt die App das Guthaben an.
+Bei Stripe unter Developers → Webhooks einen Endpunkt `https://kv-learn.app/api/stripe/webhook` mit den Ereignissen `checkout.session.completed` und `checkout.session.async_payment_succeeded` anlegen. Erst wenn alle drei Stripe-/Kennwort-Variablen gesetzt sind, zeigt die App das Guthaben an.
 
 ### Offene Antworten mit KI bewerten
 
