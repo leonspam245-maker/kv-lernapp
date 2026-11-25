@@ -631,3 +631,9 @@ input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0
 /* Erledigte Einheiten: durchgestrichen und mit Haken, aber nicht blass (sonst zu wenig Kontrast) */
 .unit.done { opacity: 1; background: var(--surface); }
 .unit.done .unit-task { color: var(--muted); }
+
+/* Marke in der Kopfzeile: Symbol und Name */
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand-mark { flex: none; border-radius: 8px; }
+.auth-brand { display: flex; align-items: center; gap: 12px; }
+.auth-brand img { border-radius: 10px; flex: none; }

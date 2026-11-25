@@ -25,7 +25,7 @@ export async function initBackend() {
 async function localAuth(path, body) {
   let res;
   try { res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); }
-  catch { throw new Error('Keine Verbindung zum Lernapp-Server. Läuft «npm start» noch?'); }
+  catch { throw new Error('Keine Verbindung zum KV-Learn-Server. Läuft «npm start» noch?'); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Fehler ${res.status}`);
   return data;
@@ -36,7 +36,7 @@ export async function currentUser() {
     // Lokale Version: Konto über Cookie beim eigenen Server prüfen
     const res = await fetch('/api/auth/me');
     if (res.status === 401) return null;
-    if (!res.ok) throw new Error('Der Lernapp-Server antwortet nicht richtig.');
+    if (!res.ok) throw new Error('Der KV-Learn-Server antwortet nicht richtig.');
     return (await res.json()).user;
   }
   const { data } = await sb.auth.getSession();

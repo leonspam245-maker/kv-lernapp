@@ -1,12 +1,12 @@
-# KV-Lernapp
+# KV-Learn
 
-Persönliche Lernapp für die KV-Lehre: Unterlagen pro Fach und Thema sammeln, mit Merkblatt, Karteikarten, Quiz und Probeprüfung üben und einen realistischen Lernplan bis zur Prüfung erstellen. Die App läuft online oder lokal auf deinem Computer. In beiden Fällen braucht jede Person ein eigenes Konto.
+KV-Learn (kv-learn.app) ist eine Lern-App für die KV-Lehre: Unterlagen pro Fach und Thema sammeln, mit Merkblatt, Karteikarten, Quiz und Probeprüfung üben und einen realistischen Lernplan bis zur Prüfung erstellen. Die App läuft online oder lokal auf deinem Computer. In beiden Fällen braucht jede Person ein eigenes Konto.
 
 ## Online nutzen (empfohlen)
 
 Adresse: **https://kv-learn.app** (die alte Adresse https://kv-lernapp.vercel.app funktioniert weiterhin).
 
-Die Lernapp läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentrum Zürich). Du meldest dich mit E-Mail und Passwort an und kannst die App auf Handy und Computer als App installieren:
+KV-Learn läuft online auf Vercel. Die Daten liegen in Supabase (Rechenzentrum Zürich). Du meldest dich mit E-Mail und Passwort an und kannst die App auf Handy und Computer als App installieren:
 
 - **iPhone (Safari):** Teilen-Symbol, dann «Zum Home-Bildschirm».
 - **Android (Chrome):** Menü ⋮, dann «App installieren».

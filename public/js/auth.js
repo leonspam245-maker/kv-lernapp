@@ -13,7 +13,7 @@ export function loginView(el, onDone) {
     el.innerHTML = `
     <section class="auth" aria-labelledby="auth-title">
       <div class="auth-intro">
-        <p class="hero-date">Deine Lernapp für die KV-Lehre</p>
+        <p class="hero-date auth-brand"><img src="/icon-hell.svg" alt="" width="44" height="44"> KV-Learn · deine Lern-App für die KV-Lehre</p>
         <h1 class="hero-title" id="auth-title">${signup ? 'Konto einrichten.' : 'Willkommen zurück.'}</h1>
         <p class="hero-meta">${signup
           ? 'Lege dein persönliches Konto an. Deine Unterlagen und dein Lernstand sind nur für dich sichtbar.'

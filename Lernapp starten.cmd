@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title KV-Lernapp
+title KV-Learn
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (
@@ -18,10 +18,10 @@ if not exist node_modules (
   )
 )
 echo.
-echo Die Lernapp startet. Dieses Fenster offen lassen, solange du lernst. Zum Beenden das Fenster schliessen.
+echo KV-Learn startet. Dieses Fenster offen lassen, solange du lernst. Zum Beenden das Fenster schliessen.
 echo.
 start "" cmd /c "timeout /t 3 >nul & start http://localhost:5173"
 call npm.cmd start
 echo.
-echo Die Lernapp wurde beendet.
+echo KV-Learn wurde beendet.
 pause

@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
     const session = await deps.stripe().checkout.sessions.create({
       mode: 'payment',
-      line_items: [{ quantity: 1, price_data: { currency: 'chf', unit_amount: amount, product_data: { name: `KI-Guthaben Lernapp CHF ${(amount / 100).toFixed(2)}`, description: 'Guthaben für KI-Erstellungen in der KV-Lernapp' } } }],
+      line_items: [{ quantity: 1, price_data: { currency: 'chf', unit_amount: amount, product_data: { name: `KI-Guthaben KV-Learn CHF ${(amount / 100).toFixed(2)}`, description: 'Guthaben für KI-Funktionen in KV-Learn (kv-learn.app)' } } }],
       client_reference_id: user.id,
       customer_email: user.email || undefined,
       metadata: { user_id: user.id, credit_rappen: String(amount), terms_accepted_at: termsAt },
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       const key = process.env.STRIPE_SECRET_KEY || '';
       console.error('Stripe Checkout fehlgeschlagen', { type: e.type, code: e.code, status: e.statusCode, message: e.message, param: e.param, keyKind: key.slice(0, key.indexOf('_', 3) + 1) || 'fehlt' });
       const msg = e.type === 'StripeAuthenticationError' || e.type === 'StripePermissionError'
-        ? 'Aufladen ist gerade nicht möglich: Der Stripe-Zugang der Lernapp ist nicht richtig eingerichtet. Bitte melde dich bei lernapp@outlook.com.'
+        ? 'Aufladen ist gerade nicht möglich: Der Stripe-Zugang von KV-Learn ist nicht richtig eingerichtet. Bitte melde dich bei lernapp@outlook.com.'
         : 'Stripe ist gerade nicht erreichbar oder nicht richtig eingerichtet. Bitte später erneut versuchen.';
       return send(res, 502, { error: msg });
     }

@@ -69,13 +69,13 @@ export function settingsView(el) {
       <div class="row">${(ci.packs || []).map((a) => `<button type="button" class="btn" data-pack="${a}" disabled>${chf(a)} aufladen</button>`).join('')}</div>
     </div>
     <label class="check"><input type="checkbox" id="terms-ok"> <span>Ich akzeptiere die <a href="/rechtliches.html#bedingungen" target="_blank" rel="noopener">Bedingungen für das KI-Guthaben</a> und habe die <a href="/rechtliches.html#datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
-    <p class="small muted">Bezahlung über Stripe. Die Kartendaten gibst du nur bei Stripe ein; die Lernapp sieht sie nie. Das Guthaben gilt nur für KI-Erstellungen in dieser App.</p>
+    <p class="small muted">Bezahlung über Stripe. Die Kartendaten gibst du nur bei Stripe ein; KV-Learn sieht sie nie. Das Guthaben gilt nur für KI-Erstellungen in dieser App.</p>
     <div id="credit-ledger"></div>` : `
     <h3>Dein eigener Schlüssel</h3>
-    <p>Mit einem eigenen Schlüssel bezahlst du direkt beim Anbieter, ohne Guthaben in der Lernapp.</p>
+    <p>Mit einem eigenen Schlüssel bezahlst du direkt beim Anbieter, ohne Guthaben bei KV-Learn.</p>
     <ol>
       <li>Auf <a href="${P.console}" target="_blank" rel="noopener">${P.consoleLabel}</a> ein Konto erstellen, Guthaben aufladen und einen API-Schlüssel anlegen.</li>
-      <li>Den Schlüssel hier eintragen. Er bleibt <strong>nur in diesem Browser</strong> (für dein Konto) und wird weder in deinen Lerndaten noch auf dem Server gespeichert. Er wird nur bei einer bestätigten KI-Erstellung über ${isCloud() ? 'den Lernapp-Server' : 'deinen Lernapp-Server'} an ${P.company} weitergereicht.</li>
+      <li>Den Schlüssel hier eintragen. Er bleibt <strong>nur in diesem Browser</strong> (für dein Konto) und wird weder in deinen Lerndaten noch auf dem Server gespeichert. Er wird nur bei einer bestätigten KI-Erstellung über ${isCloud() ? 'den KV-Learn-Server' : 'deinen KV-Learn-Server'} an ${P.company} weitergereicht.</li>
       <li>Auf einem anderen Gerät trägst du den Schlüssel dort erneut ein. An einem fremden oder gemeinsam genutzten Computer «Auf diesem Gerät merken» ausschalten.</li>
     </ol>
     ${configured
@@ -186,7 +186,7 @@ export function settingsView(el) {
   el.querySelector('#export').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify({ app: 'kv-lernapp', exportedAt: new Date().toISOString(), data: store.db }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = `lernapp-sicherung-${todayISO()}.json`; a.click();
+    a.href = URL.createObjectURL(blob); a.download = `kv-learn-sicherung-${todayISO()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     toast('Sicherung heruntergeladen.');
   });
@@ -196,7 +196,7 @@ export function settingsView(el) {
     try {
       const parsed = JSON.parse(await file.text());
       const data = parsed.data || parsed;
-      if (!Array.isArray(data.subjects) || !Array.isArray(data.sources)) throw new Error('Die Datei ist keine Sicherung der Lernapp.');
+      if (!Array.isArray(data.subjects) || !Array.isArray(data.sources)) throw new Error('Die Datei ist keine Sicherung von KV-Learn.');
       if (!(await confirmDialog('Sicherung einspielen? Alle aktuellen Daten werden durch die Sicherung ersetzt.', { ok: 'Ersetzen', danger: true }))) return;
       await commit((d) => { for (const k of Object.keys(d)) delete d[k]; Object.assign(d, data); for (const k of ['topics', 'cards', 'contents', 'attempts', 'exams']) d[k] ||= []; d.settings ||= { aiConsent: false }; });
       toast('Sicherung eingespielt.'); rerender();

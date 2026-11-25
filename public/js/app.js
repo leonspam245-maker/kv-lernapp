@@ -53,7 +53,7 @@ export function route() {
     }
     return;
   }
-  view.innerHTML = emptyState('Seite nicht gefunden', 'Diese Adresse gibt es in der Lernapp nicht.', '<a class="btn btn-primary" href="#/">Zur Startseite</a>');
+  view.innerHTML = emptyState('Seite nicht gefunden', 'Diese Adresse gibt es in KV-Learn nicht.', '<a class="btn btn-primary" href="#/">Zur Startseite</a>');
 }
 export const rerender = () => route();
 
@@ -478,7 +478,7 @@ function sourceView(el, id, query) {
     if (!user) { loginView(view, start); return; }
     await start();
   } catch (e) {
-    view.innerHTML = `<div class="notice notice-bad"><h4>Die Lernapp konnte nicht starten.</h4><p>${esc(e.message)}</p><p>${isCloud() ? 'Prüfe deine Internetverbindung' : 'Prüfe, ob der Server läuft (Befehl <code>npm start</code>)'} und lade die Seite neu.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`;
+    view.innerHTML = `<div class="notice notice-bad"><h4>KV-Learn konnte nicht starten.</h4><p>${esc(e.message)}</p><p>${isCloud() ? 'Prüfe deine Internetverbindung' : 'Prüfe, ob der Server läuft (Befehl <code>npm start</code>)'} und lade die Seite neu.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`;
   }
 })();
 

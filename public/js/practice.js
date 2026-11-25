@@ -85,7 +85,7 @@ export function practiceView(el, _id, query) {
 
 const attemptsOf = (contentId) => store.db.attempts.filter((a) => a.contentId === contentId);
 
-/** KI-Anfrage an den Lernapp-Server (Guthaben oder eigener Schlüssel). Liefert die Antwort des Servers. */
+/** KI-Anfrage an den KV-Learn-Server (Guthaben oder eigener Schlüssel). Liefert die Antwort des Servers. */
 async function postAi(payload, { quiet = false } = {}) {
   const credit = billingMode() === 'credit';
   const aiKey = credit ? '' : getAiKey(aiProvider());
@@ -95,7 +95,7 @@ async function postAi(payload, { quiet = false } = {}) {
     const token = await accessToken();
     res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(aiKey ? { 'X-AI-Key': aiKey } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) });
   }
-  catch { throw new Error('Keine Verbindung zum Lernapp-Server.'); }
+  catch { throw new Error('Keine Verbindung zum KV-Learn-Server.'); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `KI-Anfrage fehlgeschlagen (${res.status}).`);
   if (body.billing && !quiet) toast(`KI-Kosten: ${chf(body.billing.charged)} · Guthaben: ${chf(body.billing.balance)}`, 'info');

@@ -215,7 +215,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`\nKV-Lernapp läuft:  http://localhost:${PORT}`);
+  console.log(`\nKV-Learn läuft:  http://localhost:${PORT}`);
   if (HOST === '0.0.0.0') {
     for (const list of Object.values(os.networkInterfaces())) {
       for (const n of list || []) if (n.family === 'IPv4' && !n.internal) console.log(`Im gleichen WLAN (Handy): http://${n.address}:${PORT}`);

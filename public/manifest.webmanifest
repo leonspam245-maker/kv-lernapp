@@ -1,6 +1,6 @@
 {
-  "name": "KV-Lernapp",
-  "short_name": "Lernapp",
+  "name": "KV-Learn",
+  "short_name": "KV-Learn",
   "description": "Unterlagen sammeln, mit Karteikarten und Quiz üben und den Lernplan bis zur Prüfung im Blick behalten.",
   "id": "/",
   "start_url": "/",
@@ -12,7 +12,7 @@
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
 }

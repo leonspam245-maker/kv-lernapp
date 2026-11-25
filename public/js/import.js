@@ -313,7 +313,7 @@ function mykvPanel(panel, root) {
   const rerenderPanel = () => mykvPanel(panel, root);
   panel.innerHTML = `
     <div class="notice notice-info"><h4>So übernimmst du Inhalte aus myKV</h4>
-      <p>myKV braucht eine Anmeldung. Die Lernapp verbindet sich nicht mit myKV und speichert keine Zugangsdaten. Lade Unterlagen in myKV herunter und importiere die Datei, oder kopiere Lernziele, Aufgaben und Notizen und füge sie hier ein. Den myKV-Link kannst du als Quellenverweis speichern. Unterstützt werden PDF, Word (.docx) und Textdateien.</p></div>
+      <p>myKV braucht eine Anmeldung. KV-Learn verbindet sich nicht mit myKV und speichert keine Zugangsdaten. Lade Unterlagen in myKV herunter und importiere die Datei, oder kopiere Lernziele, Aufgaben und Notizen und füge sie hier ein. Den myKV-Link kannst du als Quellenverweis speichern. Unterstützt werden PDF, Word (.docx) und Textdateien.</p></div>
     <section class="card">
       <div class="tabs" role="tablist" style="margin-bottom:14px">
         ${[['text', 'Text einfügen'], ['file', 'Datei importieren'], ['link', 'Nur Link speichern']].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${m.mode === k}">${l}</button>`).join('')}
@@ -553,7 +553,7 @@ function onenotePanel(panel, root) {
   const problems = o.md ? findProblems(o.md) : [];
   panel.innerHTML = `
     <div class="notice notice-info"><h4>OneNote-Seite übernehmen</h4>
-      <p>Variante 1: In OneNote den Seiteninhalt markieren (Ctrl+A bzw. Cmd+A), kopieren und unten ins Einfügefeld einfügen. Überschriften, Listen und Tabellen bleiben soweit möglich erhalten. Variante 2: Die Seite in OneNote als PDF oder Word-Dokument (.docx) exportieren bzw. als PDF drucken und hochladen. Eine Microsoft-Anmeldung in der Lernapp ist nicht nötig.</p></div>
+      <p>Variante 1: In OneNote den Seiteninhalt markieren (Ctrl+A bzw. Cmd+A), kopieren und unten ins Einfügefeld einfügen. Überschriften, Listen und Tabellen bleiben soweit möglich erhalten. Variante 2: Die Seite in OneNote als PDF oder Word-Dokument (.docx) exportieren bzw. als PDF drucken und hochladen. Eine Microsoft-Anmeldung in KV-Learn ist nicht nötig.</p></div>
     <section class="card">
       <div class="tabs" role="tablist" style="margin-bottom:14px">${[['paste', 'Inhalt einfügen'], ['pdf', 'Als Datei hochladen']].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${o.mode === k}">${l}</button>`).join('')}</div>
       ${o.mode === 'paste' ? `
