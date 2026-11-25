@@ -1,7 +1,7 @@
 // Anmeldung und Registrierung (online über Supabase, lokal über den eigenen Server).
 // Beliebig viele Konten; jedes Konto sieht nur die eigenen Daten.
 import { esc } from './util.js';
-import { signIn, signUp, isCloud, requestPasswordReset, setNewPassword } from './backend.js';
+import { signIn, signUp, isCloud, requestPasswordReset, setNewPassword, schoolDomains, resendConfirmation } from './backend.js';
 import { leakCount, leakMessage } from './pwcheck.js';
 
 const LEHRJAHRE = ['1. Lehrjahr', '2. Lehrjahr', '3. Lehrjahr'];
@@ -9,8 +9,13 @@ const LEHRJAHRE = ['1. Lehrjahr', '2. Lehrjahr', '3. Lehrjahr'];
 export function loginView(el, onDone, startError = '') {
   document.body.classList.add('auth-mode');
   let mode = 'login';
+  let domains = []; // erlaubte Schul-Domains (online), z. B. stud.kvchur.ch
+  const domainText = () => domains.map((d) => '@' + d).join(' oder ');
+  schoolDomains().then((d) => { domains = d; const h = el.querySelector('#auth-email-hint'); if (h) h.textContent = emailHint(); });
+  const emailHint = () => (domains.length ? `Registrierung nur mit deiner Schul-E-Mail-Adresse (${domainText()}). Du erhältst eine E-Mail zum Bestätigen.` : '');
   const render = (error = '', v = {}) => {
     if (mode === 'forgot') return renderForgot(error, v);
+    if (mode === 'confirm') return renderConfirm(v);
     const signup = mode === 'signup';
     el.innerHTML = `
     <section class="auth" aria-labelledby="auth-title">
@@ -28,13 +33,14 @@ export function loginView(el, onDone, startError = '') {
           <div class="field"><label for="auth-year">Lehrjahr</label><select id="auth-year">${LEHRJAHRE.map((l, i) => `<option value="${i + 1}" ${String(v.year || 1) === String(i + 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         </div>
         <div class="field"><label for="auth-school">Berufsfachschule</label><input type="text" id="auth-school" autocomplete="organization" value="${esc(v.school ?? 'Wirtschaftsschule KV Chur')}"></div>` : ''}
-        <div class="field"><label for="auth-email">E-Mail-Adresse</label><input type="email" id="auth-email" autocomplete="email" inputmode="email" value="${esc(v.email || '')}" required></div>
+        <div class="field"><label for="auth-email">${signup && isCloud() ? 'Schul-E-Mail-Adresse' : 'E-Mail-Adresse'}</label><input type="email" id="auth-email" autocomplete="email" inputmode="email" value="${esc(v.email || '')}" required>
+          ${signup && isCloud() ? `<p class="hint" id="auth-email-hint">${esc(emailHint())}</p>` : ''}</div>
         <div class="field"><label for="auth-pw">Passwort</label><input type="password" id="auth-pw" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="8" required>
           ${signup ? '<p class="hint">Mindestens 8 Zeichen, davon mindestens eine Zahl.</p>' : ''}</div>
         ${signup ? '<div class="field"><label for="auth-pw2">Passwort wiederholen</label><input type="password" id="auth-pw2" autocomplete="new-password" minlength="8" required></div>' : ''}
         <label class="check" style="padding-top:0"><input type="checkbox" id="auth-show"> Passwort anzeigen</label>
         ${signup ? `<label class="check"><input type="checkbox" id="auth-consent" ${v.consent ? 'checked' : ''}> <span>Ich bin einverstanden, dass meine Unterlagen und mein Lernfortschritt in meinem Konto gespeichert werden (${isCloud() ? 'Supabase, Rechenzentrum Zürich' : 'nur auf diesem Computer'}). Ich kann das Konto jederzeit löschen lassen.</span></label>` : ''}
-        ${error ? `<div class="notice notice-bad" role="alert">${esc(error)}</div>` : ''}
+        ${error ? `<div class="notice notice-bad" role="alert">${esc(error)}${/noch nicht bestätigt/.test(error) ? ' <button type="button" class="btn-link" id="auth-resend">Bestätigungs-E-Mail erneut senden</button>' : ''}</div>` : ''}
         <button class="btn btn-primary btn-block" id="auth-submit">${signup ? 'Konto erstellen' : 'Anmelden'}</button>
         ${!signup && isCloud() ? '<p class="small" style="margin:12px 0 0;text-align:center"><button type="button" class="btn-link" id="auth-forgot">Passwort vergessen?</button></p>' : ''}
         <p class="small muted" style="margin:16px 0 0">${signup
@@ -51,12 +57,18 @@ export function loginView(el, onDone, startError = '') {
     });
     el.querySelector('#auth-switch').addEventListener('click', () => { mode = signup ? 'login' : 'signup'; render('', values()); });
     el.querySelector('#auth-forgot')?.addEventListener('click', () => { mode = 'forgot'; render('', { email: values().email }); });
+    el.querySelector('#auth-resend')?.addEventListener('click', () => { mode = 'confirm'; render('', { email: values().email, resend: true }); });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const v2 = values();
       const pw = val('#auth-pw');
       if (signup && !v2.name) return render('Bitte deinen Vornamen eingeben.', v2);
       if (!/^\S+@\S+\.\S+$/.test(v2.email)) return render('Bitte eine gültige E-Mail-Adresse eingeben.', v2);
+      if (signup && isCloud()) {
+        domains = await schoolDomains();
+        const domain = v2.email.split('@').pop().toLowerCase();
+        if (domains.length && !domains.includes(domain)) return render(`Registrieren kannst du dich nur mit deiner Schul-E-Mail-Adresse (${domainText()}). So haben nur KV-Lernende Zugang.`, v2);
+      }
       if (pw.length < 8) return render('Das Passwort muss mindestens 8 Zeichen lang sein.', v2);
       if (signup && !/\d/.test(pw)) return render('Das Passwort muss mindestens eine Zahl enthalten.', v2);
       if (signup && pw !== val('#auth-pw2')) return render('Die beiden Passwörter stimmen nicht überein.', v2);
@@ -69,8 +81,10 @@ export function loginView(el, onDone, startError = '') {
       }
       btn.disabled = true; btn.textContent = signup ? 'Konto wird erstellt …' : 'Anmelden …';
       try {
-        if (signup) await signUp(v2.email, pw, { firstName: v2.name, apprenticeshipYear: Number(v2.year), school: v2.school, consentAt: new Date().toISOString() });
-        else await signIn(v2.email, pw);
+        if (signup) {
+          const res = await signUp(v2.email, pw, { firstName: v2.name, apprenticeshipYear: Number(v2.year), school: v2.school, consentAt: new Date().toISOString() });
+          if (res.confirm) { mode = 'confirm'; return render('', { email: v2.email }); }
+        } else await signIn(v2.email, pw);
         document.body.classList.remove('auth-mode');
         await onDone();
       } catch (err) {
@@ -82,6 +96,33 @@ export function loginView(el, onDone, startError = '') {
     if (v.pw2 && form.querySelector('#auth-pw2')) form.querySelector('#auth-pw2').value = v.pw2;
     const first = signup ? (v.name ? form.querySelector('#auth-pw') : form.querySelector('#auth-name')) : (v.email ? form.querySelector('#auth-pw') : form.querySelector('#auth-email'));
     first?.focus();
+  };
+  // Nach der Registrierung: E-Mail-Adresse über den Link bestätigen
+  const renderConfirm = (v, error = '', resent = false) => {
+    el.innerHTML = `
+    <section class="auth" aria-labelledby="auth-title">
+      <div class="auth-intro">
+        <p class="hero-date auth-brand"><img src="/icon.svg" alt="" width="44" height="44"> KV-Learn · deine Lern-App für die KV-Lehre</p>
+        <h1 class="hero-title" id="auth-title">${v.resend ? 'E-Mail bestätigen.' : 'Fast geschafft.'}</h1>
+        <p class="hero-meta">Bestätige deine E-Mail-Adresse über den Link in der E-Mail von KV-Learn. Danach bist du direkt angemeldet.</p>
+      </div>
+      <div class="auth-form card" id="auth-confirm">
+        ${v.resend ? '' : `<div class="notice notice-ok" role="status">Falls zu <strong>${esc(v.email)}</strong> noch kein Konto besteht, ist die Bestätigungs-E-Mail unterwegs. Öffne den Link darin auf diesem Gerät. Nichts erhalten? Schau im Spam-Ordner nach.</div>`}
+        ${resent ? '<div class="notice notice-ok" role="status">Die E-Mail wurde erneut gesendet.</div>' : ''}
+        ${error ? `<div class="notice notice-bad" role="alert">${esc(error)}</div>` : ''}
+        <div class="field"><label for="auth-email">E-Mail-Adresse</label><input type="email" id="auth-email" autocomplete="email" value="${esc(v.email || '')}"></div>
+        <button type="button" class="btn btn-block" id="auth-resend-now">Bestätigungs-E-Mail ${v.resend ? '' : 'erneut '}senden</button>
+        <p class="small muted" style="margin:16px 0 0"><button type="button" class="btn-link" id="auth-back">Zur Anmeldung</button></p>
+      </div>
+    </section>`;
+    el.querySelector('#auth-back').addEventListener('click', () => { mode = 'login'; render('', { email: el.querySelector('#auth-email').value.trim() }); });
+    el.querySelector('#auth-resend-now').addEventListener('click', async (e) => {
+      const email = el.querySelector('#auth-email').value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(email)) return renderConfirm({ ...v, email }, 'Bitte eine gültige E-Mail-Adresse eingeben.');
+      e.target.disabled = true; e.target.textContent = 'Wird gesendet …';
+      try { await resendConfirmation(email); renderConfirm({ ...v, email }, '', true); }
+      catch (err) { renderConfirm({ ...v, email }, err.message); }
+    });
   };
   // «Passwort vergessen?»: E-Mail mit Link anfordern
   const renderForgot = (error = '', v = {}, sent = false) => {

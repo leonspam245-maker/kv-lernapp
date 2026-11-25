@@ -9,7 +9,7 @@ import { practiceView, contentView, cardsView } from './practice.js';
 import { planListView, examFormView, examPlanView, toggleUnit, unitStartLink, routeHtml } from './plan.js';
 import { settingsView } from './settings.js';
 import { ablageView } from './ablage.js';
-import { initBackend, currentUser, isCloud, isRecovery, recoveryLinkError } from './backend.js';
+import { initBackend, currentUser, isCloud, isRecovery, recoveryLinkError, justConfirmed } from './backend.js';
 import { loginView, newPasswordView } from './auth.js';
 
 const view = document.getElementById('view');
@@ -465,6 +465,7 @@ function sourceView(el, id, query) {
         await commit((d) => { d.settings.profile = { firstName: meta.firstName, apprenticeshipYear: meta.apprenticeshipYear || 1, school: meta.school || '' }; }).catch(() => {});
       }
       route();
+      if (justConfirmed()) toast('E-Mail-Adresse bestätigt. Willkommen bei KV-Learn!');
       // Rückkehr von der Zahlungsseite (Stripe)
       const pay = new URLSearchParams(location.search).get('guthaben');
       if (pay) {

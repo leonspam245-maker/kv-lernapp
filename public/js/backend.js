@@ -21,16 +21,20 @@ export async function initBackend() {
   // Link aus der E-Mail «Passwort zurücksetzen»: Supabase hängt type=recovery (oder einen Fehler) an die Adresse
   const hash = location.hash + location.search;
   const recovery = /type=recovery/.test(hash);
+  const confirmLink = /type=(signup|email_change)|access_token=/.test(hash) && !recovery;
   const linkError = /error_code=|error=access_denied/.test(hash);
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-  if (recovery || linkError) {
+  if (recovery || confirmLink || linkError) {
     await sb.auth.getSession(); // wartet, bis die Anmeldung aus dem Link übernommen ist
     flags.recovery = recovery && !linkError;
-    flags.linkError = linkError ? 'Der Link ist abgelaufen oder wurde schon verwendet. Fordere unter «Passwort vergessen?» einen neuen an.' : '';
+    flags.confirmed = confirmLink && !linkError;
+    flags.linkError = linkError ? 'Der Link ist abgelaufen oder wurde schon verwendet. Melde dich an; falls deine E-Mail-Adresse noch nicht bestätigt ist, kannst du den Link neu anfordern. Für ein neues Passwort: «Passwort vergessen?».' : '';
     history.replaceState(null, '', location.pathname);
   }
 }
-const flags = { recovery: false, linkError: '' };
+const flags = { recovery: false, confirmed: false, linkError: '' };
+/** Wurde die App über den Bestätigungslink aus der Registrierungs-E-Mail geöffnet? */
+export const justConfirmed = () => flags.confirmed;
 /** Wurde die App über den Link «Passwort zurücksetzen» geöffnet? */
 export const isRecovery = () => flags.recovery;
 export const recoveryLinkError = () => flags.linkError;
@@ -88,7 +92,8 @@ export async function currentUser() {
 const authError = (error) => {
   const m = error?.message || '';
   if (/invalid login credentials/i.test(m)) return 'E-Mail-Adresse oder Passwort stimmt nicht.';
-  if (/database error saving new user/i.test(m)) return 'Das Konto konnte nicht erstellt werden. Bitte später erneut versuchen.';
+  if (/database error saving new user|schul-e-mail/i.test(m)) return 'Das Konto konnte nicht erstellt werden. Registrieren kannst du dich nur mit deiner Schul-E-Mail-Adresse.';
+  if (/email not confirmed/i.test(m)) return 'Deine E-Mail-Adresse ist noch nicht bestätigt. Öffne den Link in der E-Mail von KV-Learn (auch im Spam-Ordner nachsehen).';
   if (/already registered/i.test(m)) return 'Diese E-Mail-Adresse ist bereits registriert. Bitte anmelden.';
   if (/password should be at least/i.test(m)) return 'Das Passwort muss mindestens 8 Zeichen lang sein.';
   if (/rate limit/i.test(m)) return 'Zu viele Versuche. Bitte einige Minuten warten.';
@@ -100,18 +105,38 @@ export async function signIn(email, password) {
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw new Error(authError(error));
 }
+/**
+ * Konto erstellen. Online muss die (Schul-)E-Mail-Adresse zuerst über den Link in der E-Mail bestätigt werden:
+ * Rückgabe { confirm: true }. Lokal ist man sofort angemeldet.
+ */
 export async function signUp(email, password, profile = {}) {
-  if (!isCloud()) { await localAuth('/api/auth/register', { email, password, profile }); return; }
-  const { error } = await sb.auth.signUp({ email, password, options: { data: profile } });
-  // Das Konto wird serverseitig direkt bestätigt; danach gleich anmelden.
-  // Auch bei einem Fehler (z. B. E-Mail-Versandgrenze) kann das Konto bereits bestehen: Anmeldung versuchen.
-  try {
-    await signIn(email, password);
-  } catch (signInError) {
-    if (error) throw new Error(authError(error));
-    // Gibt es die E-Mail-Adresse schon mit anderem Passwort, meldet Supabase keinen Fehler; die Anmeldung scheitert dann.
-    throw new Error('Mit dieser E-Mail-Adresse besteht bereits ein Konto. Bitte anmelden.');
-  }
+  if (!isCloud()) { await localAuth('/api/auth/register', { email, password, profile }); return { confirm: false }; }
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: profile, emailRedirectTo: `${location.origin}/` } });
+  if (error) throw new Error(authError(error));
+  if (data?.session) return { confirm: false };
+  // Supabase verrät aus Datenschutzgründen nicht, ob die Adresse schon registriert ist: Hinweis bleibt neutral
+  return { confirm: true };
+}
+/** Bestätigungs-E-Mail erneut senden. */
+export async function resendConfirmation(email) {
+  const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: `${location.origin}/` } });
+  if (error) throw new Error(authError(error));
+}
+let domainCache = null;
+/** Erlaubte Schul-Domains für die Registrierung (leer = alle Adressen erlaubt). */
+export async function schoolDomains() {
+  if (!isCloud()) return [];
+  if (domainCache) return domainCache;
+  const { data, error } = await sb.rpc('school_domains');
+  if (error) return [];
+  domainCache = data || [];
+  return domainCache;
+}
+/** Darf das angemeldete Konto die gemeinsame Ablage nutzen? */
+export async function isSchoolMember() {
+  if (!isCloud()) return false;
+  const { data, error } = await sb.rpc('is_school_member');
+  return !error && data === true;
 }
 export async function signOut() {
   if (isCloud()) await sb.auth.signOut();

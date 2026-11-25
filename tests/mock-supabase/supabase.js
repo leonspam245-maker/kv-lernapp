@@ -10,18 +10,25 @@
   function createClient() {
     const auth = {
       async getSession() { await delay(); const db = load(); return { data: { session: db.session } }; },
+      // db.config: { domains: [...], confirm: true } bildet Schul-Domains (Datenbank-Trigger) und E-Mail-Bestätigung nach
       async signUp({ email, password, options }) {
-        await delay(); const db = load();
-        if (db.users.some((x) => x.email === email)) return { data: { user: null }, error: null }; // wie Supabase: kein Hinweis auf bestehende Adresse
+        await delay(); const db = load(); const cfg = db.config || {};
+        if (db.users.some((x) => x.email === email)) return { data: { user: null, session: null }, error: null }; // wie Supabase: kein Hinweis auf bestehende Adresse
         if (password.length < 8) return { error: { message: 'Password should be at least 8 characters' } };
+        if (cfg.domains?.length && !cfg.domains.includes(email.split('@').pop().toLowerCase())) return { data: { user: null, session: null }, error: { message: 'Database error saving new user', status: 500 } };
         const id = 'u' + (db.users.length + 1);
-        db.users.push({ id, email, password, user_metadata: options?.data || {} }); save(db);
-        return { data: { user: { id, email } }, error: null };
+        db.users.push({ id, email, password, user_metadata: options?.data || {}, confirmed: !cfg.confirm });
+        if (cfg.confirm) { (db.mails ||= []).push({ type: 'signup', email, redirectTo: options?.emailRedirectTo }); save(db); return { data: { user: { id, email }, session: null }, error: null }; }
+        db.session = { access_token: 'mock-token', user: { id, email, user_metadata: options?.data || {} } }; save(db);
+        return { data: { user: { id, email }, session: db.session }, error: null };
+      },
+      async resend({ type, email }) { await delay(); const db = load(); (db.mails ||= []).push({ type, email }); save(db); return { data: {}, error: null };
       },
       async signInWithPassword({ email, password }) {
         await delay(); const db = load();
         const u = db.users.find((x) => x.email === email && x.password === password);
         if (!u) return { error: { message: 'Invalid login credentials' } };
+        if (u.confirmed === false) return { error: { message: 'Email not confirmed' } };
         db.session = { access_token: 'mock-token', user: { id: u.id, email, user_metadata: u.user_metadata || {} } }; save(db);
         return { data: { session: db.session }, error: null };
       },
@@ -153,6 +160,11 @@
       async rpc(name, args = {}) {
         await delay();
         if (name === 'is_admin') return { data: Boolean(uid()) && load().admin === uid(), error: null };
+        if (name === 'school_domains') return { data: load().config?.domains || [], error: null };
+        if (name === 'is_school_member') {
+          const db = load(); const u = db.users.find((x) => x.id === uid()); const doms = db.config?.domains || [];
+          return { data: Boolean(u) && (db.admin === u.id || (u.confirmed !== false && (!doms.length || doms.includes(u.email.split('@').pop())))), error: null };
+        }
         const { base_version, new_data } = args;
         const id = uid();
         if (!id) return { data: null, error: { message: 'Nicht angemeldet', code: '28000' } };

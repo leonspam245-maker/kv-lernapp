@@ -3,7 +3,7 @@
 import { store } from './store.js';
 import { esc, fmtDate, norm, plural } from './util.js';
 import { toast, confirmDialog, emptyState } from './ui.js';
-import { isCloud, listLibrary, isLibraryAdmin, uploadLibraryItem, libraryFileUrl, libraryFile, reportLibraryItem, deleteLibraryItem, setLibraryHidden } from './backend.js';
+import { isCloud, isSchoolMember, listLibrary, isLibraryAdmin, uploadLibraryItem, libraryFileUrl, libraryFile, reportLibraryItem, deleteLibraryItem, setLibraryHidden } from './backend.js';
 import { importFromLibrary } from './import.js';
 import { setLeaveGuard } from './app.js';
 
@@ -46,11 +46,12 @@ const fmtSize = (b) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).repla
 const importable = (item) => ['pdf', 'docx', 'txt'].includes(extOf(item.file_name));
 const REASONS = ['Urheberrecht verletzt (z. B. Lehrmittel eines Verlags)', 'Persönliche Daten sichtbar', 'Unpassender Inhalt', 'Falscher Ordner oder fehlerhafte Datei'];
 
-let cache = { items: null, admin: false, at: 0 };
+let cache = { items: null, admin: false, member: false, at: 0 };
 async function load(force = false) {
   if (!force && cache.items && Date.now() - cache.at < 30000) return cache;
-  const [items, admin] = await Promise.all([listLibrary(), isLibraryAdmin()]);
-  cache = { items, admin, at: Date.now() };
+  const member = await isSchoolMember();
+  const [items, admin] = member ? await Promise.all([listLibrary(), isLibraryAdmin()]) : [[], false];
+  cache = { items, admin, member, at: Date.now() };
   return cache;
 }
 
@@ -63,6 +64,10 @@ export function ablageView(el, param = '', query = {}) {
   el.innerHTML = '<div class="page-head"><div><h1>Ablage</h1><p>Wird geladen …</p></div></div>';
   load(Boolean(query.neu)).then(() => {
     if (!el.isConnected) return;
+    if (!cache.member) {
+      el.innerHTML = `<div class="page-head"><div><h1>Ablage</h1></div></div>${emptyState('Nur mit Schul-E-Mail-Adresse', 'Die gemeinsame Ablage steht nur Konten offen, die mit einer bestätigten Schul-E-Mail-Adresse registriert sind. So haben nur KV-Lernende Zugang. Erstelle ein Konto mit deiner Schuladresse, oder melde dich bei info@kv-learn.app.')}`;
+      return;
+    }
     if (!param) overview(el);
     else if (/^lj[123]$/.test(param)) yearView(el, param);
     else if (folderInfo(param)) folderView(el, param);
@@ -79,7 +84,7 @@ const myYear = () => { const y = Number(store.db?.settings?.profile?.apprentices
 function overview(el) {
   const mine = myYear();
   el.innerHTML = `
-    <div class="page-head"><div><h1>Ablage</h1><p>Gemeinsamer Ordner für Handouts, Zusammenfassungen und Vorlagen. Alles hier sehen alle angemeldeten Lernenden.</p></div></div>
+    <div class="page-head"><div><h1>Ablage</h1><p>Gemeinsamer Ordner für Handouts, Zusammenfassungen und Vorlagen. Zugang haben nur KV-Lernende mit bestätigter Schul-E-Mail-Adresse.</p></div></div>
     <div class="field ablage-search"><label for="lib-q">In der ganzen Ablage suchen</label><input type="search" id="lib-q" placeholder="Titel, Beschreibung oder Dateiname" autocomplete="off"></div>
     <div id="lib-results"></div>
     <div class="ablage-years" id="lib-years">${YEARS.map(([y, label]) => `
@@ -235,8 +240,8 @@ function uploadForm(box, folder, onDone) {
         <p class="hint">PDF, Word, PowerPoint, Excel, Text oder Bild (PNG, JPG), höchstens 20 MB</p></div>
       <div class="field"><label for="lib-title">Titel</label><input type="text" id="lib-title" name="title" maxlength="140" placeholder="z. B. Zusammenfassung Kaufvertrag OR"></div>
       <div class="field"><label for="lib-desc">Beschreibung (optional)</label><textarea id="lib-desc" name="description" maxlength="500" style="min-height:80px" placeholder="Worum geht es? Für welche Prüfung oder welches Thema?"></textarea></div>
-      <div class="notice notice-info small"><p>Alle angemeldeten Lernenden sehen die Datei zusammen mit deinem Vornamen. Teile keine Dateien mit persönlichen Daten anderer Personen.</p></div>
-      <label class="check"><input type="checkbox" id="lib-rights" name="rights"> Ich darf diese Datei teilen: Ich habe sie selbst erstellt, oder die Rechteinhaber erlauben die Weitergabe. Lehrmittel von Verlagen sowie Unterlagen aus myKV oder von Lehrpersonen lade ich nur mit deren ausdrücklicher Erlaubnis hoch.</label>
+      <div class="notice notice-info small"><p>Alle Lernenden mit Schulkonto sehen die Datei zusammen mit deinem Vornamen. Teile keine Dateien mit persönlichen Daten anderer Personen.</p></div>
+      <label class="check"><input type="checkbox" id="lib-rights" name="rights"> Ich darf diese Datei hier teilen: Ich habe sie selbst erstellt, oder die Lizenz bzw. die Rechteinhaber erlauben die Weitergabe an andere KV-Lernende (z. B. Unterlagen aus myKV im Rahmen der Lizenz).</label>
       <div id="lib-error"></div>
       <div class="row end"><button class="btn btn-primary" id="lib-send">Hochladen</button></div>
     </form></section>`;
@@ -293,8 +298,8 @@ function uploadForm(box, folder, onDone) {
 function rulesHtml() {
   return `<details class="card ablage-rules"><summary><strong>Regeln der Ablage</strong></summary>
     <ul>
-      <li>Teile nur, was du teilen darfst: eigene Zusammenfassungen, eigene Notizen oder Unterlagen, deren Weitergabe ausdrücklich erlaubt ist.</li>
-      <li>Lehrmittel von Verlagen und Inhalte aus myKV sind urheberrechtlich geschützt. Deine myKV-Lizenz gilt nur für dich persönlich.</li>
+      <li>Zugang haben nur Konten mit bestätigter Schul-E-Mail-Adresse, also KV-Lernende.</li>
+      <li>Teile eigene Zusammenfassungen und Notizen sowie Unterlagen (z. B. aus myKV), soweit die Lizenz oder die Rechteinhaber die Weitergabe an andere Lernende erlauben.</li>
       <li>Keine persönlichen Daten anderer Personen, keine Prüfungen, die noch geschrieben werden.</li>
       <li>Problematische Einträge kannst du melden. Nach zwei Meldungen wird ein Eintrag ausgeblendet und geprüft.</li>
     </ul></details>`;

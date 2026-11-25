@@ -150,7 +150,10 @@ try {
     await p2.fill('#auth-pw2', 'drittes-passwort1');
     await p2.check('#auth-consent');
     await p2.click('#auth-submit');
-    assert.match(await p2.innerText('.notice-bad'), /bereits ein Konto/);
+    // Wie Supabase: kein Hinweis, ob die Adresse schon registriert ist; neutraler Hinweis, kein Zugang
+    await p2.waitForSelector('#auth-confirm');
+    assert.match(await p2.innerText('#auth-confirm'), /Falls zu noah@example\.ch noch kein Konto besteht/);
+    assert.equal((await mockState(p2)).session, null);
     await other.close();
   });
 
@@ -384,6 +387,58 @@ try {
     await assertReadable(mp, 'Ablage Handy');
     await mp.screenshot({ path: path.join(SHOTS, 'cloud-ablage-3-handy.png'), fullPage: true });
     await m.close();
+  });
+
+  await check('Schul-E-Mail-Adresse: Registrierung nur mit @stud.kvchur.ch, Bestätigung per E-Mail, Ablage nur für Schulkonten', async () => {
+    const c = await browser.newContext(); const p = await c.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.goto(BASE + '/');
+    // Bisherige Konten übernehmen (Lea mit example.ch-Adresse), dann Schul-Domain und E-Mail-Bestätigung einschalten
+    await p.evaluate((st) => localStorage.setItem('mock-supabase', JSON.stringify({ ...st, session: null, config: { domains: ['stud.kvchur.ch'], confirm: true } })), await mockState());
+    await p.reload(); await p.waitForSelector('#auth-form');
+    await p.click('#auth-switch');
+    assert.match(await p.innerText('label[for=auth-email]'), /Schul-E-Mail-Adresse/i);
+    await p.waitForFunction(() => /@stud\.kvchur\.ch/.test(document.querySelector('#auth-email-hint')?.textContent || ''));
+    await p.fill('#auth-name', 'Sara');
+    await p.fill('#auth-email', 'sara@gmail.com');
+    await p.fill('#auth-pw', 'schul-passwort-9'); await p.fill('#auth-pw2', 'schul-passwort-9');
+    await p.check('#auth-consent'); await p.click('#auth-submit');
+    assert.match(await p.innerText('.notice-bad'), /nur mit deiner Schul-E-Mail-Adresse \(@stud\.kvchur\.ch\)/);
+    await assertReadable(p, 'Registrierung Schuladresse');
+    await p.screenshot({ path: path.join(SHOTS, 'cloud-schuladresse-1.png'), fullPage: true });
+    // Auch am Browser vorbei abgelehnt (wie der Datenbank-Trigger)
+    const direct = await p.evaluate(async () => (await window.supabase.createClient().auth.signUp({ email: 'x@gmail.com', password: 'abcdefgh1' })).error?.message);
+    assert.match(direct, /Database error saving new user/);
+    await p.fill('#auth-email', 'Sara.Muster@stud.kvchur.ch'.toLowerCase());
+    await p.fill('#auth-pw', 'schul-passwort-9'); await p.fill('#auth-pw2', 'schul-passwort-9');
+    await p.click('#auth-submit');
+    await p.waitForSelector('#auth-confirm');
+    assert.match(await p.innerText('#auth-confirm'), /sara\.muster@stud\.kvchur\.ch/);
+    assert.equal((await mockState(p)).mails.at(-1).redirectTo, BASE + '/');
+    await assertReadable(p, 'E-Mail bestätigen');
+    await p.screenshot({ path: path.join(SHOTS, 'cloud-schuladresse-2-bestaetigen.png'), fullPage: true });
+    await p.click('#auth-resend-now');
+    await p.waitForSelector('text=Die E-Mail wurde erneut gesendet.');
+    // Anmelden vor der Bestätigung: Hinweis mit Möglichkeit, die E-Mail erneut zu senden
+    await p.click('#auth-back');
+    await p.fill('#auth-pw', 'schul-passwort-9'); await p.click('#auth-submit');
+    assert.match(await p.innerText('.notice-bad'), /noch nicht bestätigt/);
+    assert.equal(await p.locator('#auth-resend').count(), 1);
+    // Bestätigung (Link aus der E-Mail) nachbilden, dann anmelden: Ablage offen
+    await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('mock-supabase')); s.users.find((u) => u.email === 'sara.muster@stud.kvchur.ch').confirmed = true; localStorage.setItem('mock-supabase', JSON.stringify(s)); });
+    await p.fill('#auth-pw', 'schul-passwort-9'); await p.click('#auth-submit');
+    await p.waitForSelector('.home-grid');
+    await p.goto(BASE + '/#/ablage'); await p.waitForSelector('.ablage-year');
+    // Konto ohne Schuladresse (Lea, example.ch): Ablage gesperrt, übrige App nutzbar
+    await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('mock-supabase')); s.session = null; localStorage.setItem('mock-supabase', JSON.stringify(s)); });
+    await p.goto(BASE + '/'); await p.waitForSelector('#auth-form');
+    await p.fill('#auth-email', 'lernende@example.ch'); await p.fill('#auth-pw', 'sicheres-passwort1'); await p.click('#auth-submit');
+    await p.waitForSelector('.home-grid');
+    await p.goto(BASE + '/#/ablage');
+    await p.waitForSelector('text=Nur mit Schul-E-Mail-Adresse');
+    assert.equal(await p.locator('.ablage-year').count(), 0);
+    await assertReadable(p, 'Ablage gesperrt');
+    await c.close();
   });
 
   await check('Installierbar: Manifest, Symbole und Service Worker', async () => {
