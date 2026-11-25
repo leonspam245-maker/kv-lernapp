@@ -66,7 +66,7 @@ function page({ title, preheader, heading, body, notYou }) {
               <p style="margin:20px 0 0;font-size:14px;line-height:1.55;color:${C.soft};"><strong style="color:${C.ink};">${notYou[0]}</strong> ${notYou[1]}</p>
               <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:${C.soft};">
                 KV-Learn · Lern-App für die KV-Lehre · <a href="https://kv-learn.app" style="color:${C.link};font-weight:bold;">kv-learn.app</a><br>
-                Fragen? <a href="mailto:lernapp@outlook.com" style="color:${C.link};font-weight:bold;">lernapp@outlook.com</a> · <a href="https://kv-learn.app/rechtliches.html" style="color:${C.link};">Impressum und Datenschutz</a>
+                Fragen? <a href="mailto:info@kv-learn.app" style="color:${C.link};font-weight:bold;">info@kv-learn.app</a> · <a href="https://kv-learn.app/rechtliches.html" style="color:${C.link};">Impressum und Datenschutz</a>
               </p>
             </td>
           </tr>

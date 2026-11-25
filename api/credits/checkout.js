@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       const key = process.env.STRIPE_SECRET_KEY || '';
       console.error('Stripe Checkout fehlgeschlagen', { type: e.type, code: e.code, status: e.statusCode, message: e.message, param: e.param, keyKind: key.slice(0, key.indexOf('_', 3) + 1) || 'fehlt' });
       const msg = e.type === 'StripeAuthenticationError' || e.type === 'StripePermissionError'
-        ? 'Aufladen ist gerade nicht möglich: Der Stripe-Zugang von KV-Learn ist nicht richtig eingerichtet. Bitte melde dich bei lernapp@outlook.com.'
+        ? 'Aufladen ist gerade nicht möglich: Der Stripe-Zugang von KV-Learn ist nicht richtig eingerichtet. Bitte melde dich bei info@kv-learn.app.'
         : 'Stripe ist gerade nicht erreichbar oder nicht richtig eingerichtet. Bitte später erneut versuchen.';
       return send(res, 502, { error: msg });
     }
