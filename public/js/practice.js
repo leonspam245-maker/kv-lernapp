@@ -1,11 +1,11 @@
 // Üben: Lerninhalte erstellen, Merkblatt anzeigen, Karteikarten, Quiz und Probeprüfung.
 import { store, commit, saveProgress, byId, subjectName, topicName, sourceTitle, topicsOf } from './store.js';
 import { esc, uid, todayISO, fmtDateTime, plural, norm, shuffle } from './util.js';
-import { toast, confirmDialog, refChips, originBadge, emptyState, renderMarkdown } from './ui.js';
+import { toast, confirmDialog, refChips, originBadge, emptyState, renderMarkdown, progressBar } from './ui.js';
 import { buildMerkblatt, buildCards, buildQuestions, grade, swissGrade } from './gen.js';
 import { newCard, rateCard, sessionQueue, REINSERT_AFTER } from './srs.js';
 import { rerender } from './app.js';
-import { accessToken } from './backend.js';
+import { accessToken, isCloud } from './backend.js';
 import { getAiKey } from './aikeys.js';
 import { billingMode, aiAccess, chf } from './billing.js';
 
@@ -29,7 +29,7 @@ export function practiceView(el, _id, query) {
   const cardCount = db.cards.filter((c) => selTopics.has(c.topicId)).length;
 
   el.innerHTML = `
-    <div class="page-head"><div><h1>Üben</h1><p>Wähle Themen und Unterlagen. Daraus entstehen Merkblatt, Karteikarten, Quiz und Probeprüfung.</p></div></div>
+    <div class="page-head"><div><h1>Üben</h1><p>Wähle Themen und Unterlagen. Daraus entstehen Merkblatt, Karteikarten, Quiz und Probeprüfung.</p></div>${isCloud() ? '<a class="btn" href="#/pakete">Fertige Lernpakete</a>' : ''}</div>
     <section class="card">
       <div class="field"><label for="pr-subject">Fach</label><select id="pr-subject">${db.subjects.map((s) => `<option value="${s.id}" ${s.id === subjectId ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
       <fieldset style="border:0;padding:0;margin:0 0 12px"><legend class="eyebrow">Themen</legend>
@@ -196,10 +196,12 @@ export function contentView(el, id) {
   const sourcesHtml = c.sourceIds.map((sid) => refChips([{ sourceId: sid, page: null }], db)).join(' ');
   const engineNote = c.engine === 'ki'
     ? '<div class="notice notice-warn small">Mit KI erstellt. Prüfe die Aussagen anhand der verlinkten Unterlagen. Eigene Beispiele der KI sind gekennzeichnet.</div>'
-    : '<div class="notice notice-info small">Lokal aus deinen Unterlagen zusammengestellt. Begriffe und Erklärungen stammen aus den verlinkten Quellen.</div>';
+    : c.engine === 'paket'
+      ? '<div class="notice notice-info small">Aus einem Lernpaket von KV-Learn, abgestimmt auf myKV und den Bildungsplan. Massgebend sind die Unterlagen deiner Schule.</div>'
+      : '<div class="notice notice-info small">Lokal aus deinen Unterlagen zusammengestellt. Begriffe und Erklärungen stammen aus den verlinkten Quellen.</div>';
   el.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">${TYPE[c.type]} · ${c.topicIds.map((t) => `<a href="#/thema/${t}">${esc(topicName(t))}</a>`).join(', ')}</div><h1>${esc(c.title)}</h1>
-      <p class="small">Erstellt ${fmtDateTime(c.createdAt)} · Gestützt auf: ${sourcesHtml}</p></div>
+      <p class="small">Erstellt ${fmtDateTime(c.createdAt)}${c.sourceIds.length ? ` · Gestützt auf: ${sourcesHtml}` : ''}</p></div>
       <div class="row no-print">${c.type === 'merkblatt' ? '<button class="btn" id="print">Drucken / PDF</button>' : ''}<button class="btn btn-danger btn-small" id="del">Löschen</button></div></div>
     ${engineNote}
     <div id="content-body" class="content"></div>`;
@@ -357,10 +359,14 @@ function runQuiz(el, c, questions, resume = null) {
 
 // ---------- Probeprüfung ----------
 function runExam(el, c) {
+  clearInterval(el._examTick); // Timer einer früheren Runde beenden
   const qs = c.data.questions;
   const total = qs.reduce((s, q) => s + q.points, 0);
-  el.innerHTML = `<section class="card"><div class="row between"><div><div class="eyebrow">Probeprüfung</div><strong>${plural(qs.length, 'Aufgabe', 'Aufgaben')} · ${total} Punkte</strong></div><span class="muted small">Empfohlene Zeit: ca. ${Math.max(10, Math.round(total * 1.5))} Min.</span></div>
-    <p class="small muted" style="margin-top:8px">Die Lösungen erscheinen erst nach dem Abgeben.</p></section>
+  const minutes = Number(c.data.zeit) || Math.max(10, Math.round(total * 1.5));
+  el.innerHTML = `<section class="card"><div class="row between"><div><div class="eyebrow">Probeprüfung</div><strong>${plural(qs.length, 'Aufgabe', 'Aufgaben')} · ${total} Punkte · ${minutes} Min.</strong>${c.data.hilfsmittel ? `<div class="small muted">Hilfsmittel: ${esc(c.data.hilfsmittel)}</div>` : ''}</div>
+      <div class="exam-timer" id="timer"><button type="button" class="btn btn-primary" id="timer-start">Mit Timer starten (${minutes} Min.)</button></div></div>
+    <p class="small muted" style="margin-top:8px">Die Lösungen erscheinen erst nach dem Abgeben. Mit Timer wird die Prüfung bei Ablauf der Zeit automatisch abgegeben.</p></section>
+    ${c.data.intro ? `<section class="card exam-intro"><div class="eyebrow">Ausgangslage und Unterlagen</div><div class="md">${renderMarkdown(c.data.intro)}</div></section>` : ''}
     <form id="exam" novalidate>${qs.map((q, i) => `<section class="card question" data-q="${i}"><span class="points">${q.points} P.</span><div class="eyebrow">Aufgabe ${i + 1}</div><div class="prompt">${esc(q.prompt)}</div>${questionInputHtml(q, `q${i}`)}<div class="sol"></div></section>`).join('')}
     <div class="row end"><button class="btn btn-primary" id="submit">Prüfung abgeben</button></div></form>
     <div id="result"></div>`;
@@ -373,15 +379,32 @@ function runExam(el, c) {
     el.querySelector('#clear-draft').addEventListener('click', () => { saveProgress({ kind: 'session', contentId: c.id, value: null }); runExam(el, c); });
   }
   let draftTimer = null;
-  const saveDraft = () => saveProgress({ kind: 'session', contentId: c.id, value: { kind: 'exam', answers: qs.map((q, i) => readAnswer(el, q, `q${i}`)), at: new Date().toISOString() } });
+  let endsAt = draft?.kind === 'exam' && draft.endsAt ? draft.endsAt : null;
+  let tick = null;
+  const saveDraft = () => saveProgress({ kind: 'session', contentId: c.id, value: { kind: 'exam', answers: qs.map((q, i) => readAnswer(el, q, `q${i}`)), at: new Date().toISOString(), endsAt } });
+  // Timer: läuft auch nach dem Neuladen weiter (Endzeit im Entwurf); bei Ablauf automatisch abgeben
+  const showTimer = () => {
+    const box = el.querySelector('#timer');
+    if (!box || !endsAt) return;
+    const left = Math.max(0, Math.round((new Date(endsAt) - Date.now()) / 1000));
+    box.innerHTML = `<span class="timer-clock${left <= 300 ? ' warn' : ''}" role="timer" aria-live="off">${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}</span>`;
+    if (left === 0) { clearInterval(tick); tick = null; if (el.querySelector('#submit')) { toast('Die Zeit ist abgelaufen. Die Prüfung wurde abgegeben.', 'info'); submit(true); } }
+  };
+  const startTimer = () => { clearInterval(tick); clearInterval(el._examTick); showTimer(); tick = el._examTick = setInterval(() => { if (!el.isConnected) { clearInterval(tick); return; } showTimer(); }, 1000); };
+  el.querySelector('#timer-start').addEventListener('click', () => { endsAt = new Date(Date.now() + minutes * 60000).toISOString(); saveDraft(); startTimer(); });
+  if (endsAt) startTimer();
   const scheduleDraft = () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 700); };
   el.querySelector('#exam').addEventListener('input', scheduleDraft);
   el.querySelector('#exam').addEventListener('change', scheduleDraft);
-  el.querySelector('#submit').addEventListener('click', async () => {
+  el.querySelector('#submit').addEventListener('click', () => submit(false));
+  async function submit(force) {
+    if (!el.querySelector('#submit') || el.querySelector('#submit').disabled) return;
     const answers = qs.map((q, i) => readAnswer(el, q, `q${i}`));
     const open = answers.filter((a, i) => isEmpty(qs[i], a)).length;
-    if (open && !(await confirmDialog(`${plural(open, 'Aufgabe ist', 'Aufgaben sind')} noch nicht beantwortet. Trotzdem abgeben?`, { ok: 'Abgeben' }))) return;
-    clearTimeout(draftTimer);
+    if (!force && open && !(await confirmDialog(`${plural(open, 'Aufgabe ist', 'Aufgaben sind')} noch nicht beantwortet. Trotzdem abgeben?`, { ok: 'Abgeben' }))) return;
+    clearTimeout(draftTimer); clearInterval(tick); tick = null;
+    const used = endsAt ? Math.min(minutes * 60, Math.max(0, minutes * 60 - Math.round((new Date(endsAt) - Date.now()) / 1000))) : null;
+    if (el.querySelector('#timer')) el.querySelector('#timer').innerHTML = used !== null ? `<span class="small muted">Abgegeben nach ${Math.ceil(used / 60)} Min.</span>` : '';
     const graded = qs.map((q, i) => ({ q, answer: answers[i], r: grade(q, answers[i]) }));
     // Offene Antworten mit KI bewerten (leere Antworten bleiben bei 0 Punkten)
     const openIdx = graded.map((g, i) => (g.q.type === 'open' && !isEmpty(g.q, g.answer) ? i : null)).filter((i) => i !== null);
@@ -424,11 +447,28 @@ function runExam(el, c) {
           <p>Note ca. <strong>${note.toFixed(1)}</strong> <span class="small muted">(Punkte ÷ Maximum × 5 + 1, auf halbe Noten gerundet – deine Schule kann anders rechnen)</span></p>
           <p class="small muted">${saved ? 'Gespeichert. Fehler fliessen in Statistik und Lernplan ein.' : SAVED_LATER}</p>
           <div class="row" style="justify-content:center"><button class="btn" id="again">Erneut lösen</button><a class="btn" href="#/plan">Zum Lernplan</a></div></section>`;
+        res.insertAdjacentHTML('beforeend', weaknessHtml(items));
         res.querySelector('#again').addEventListener('click', () => { runExam(el, c); window.scrollTo(0, 0); });
       }
     });
     res.scrollIntoView({ behavior: 'smooth' });
-  });
+  }
+}
+
+/** Auswertung: Themen und Aufgaben mit weniger als der Hälfte der Punkte (Schwächen) */
+function weaknessHtml(items) {
+  const byTopic = new Map();
+  for (const it of items) {
+    const t = byTopic.get(it.q.topicId) || { points: 0, max: 0 };
+    t.points += it.points; t.max += it.maxPoints; byTopic.set(it.q.topicId, t);
+  }
+  const weak = items.map((it, i) => ({ ...it, nr: i + 1 })).filter((it) => it.maxPoints && it.points / it.maxPoints < 0.5);
+  const topics = [...byTopic].map(([id, t]) => ({ id, name: topicName(id), pct: t.max ? Math.round((t.points / t.max) * 100) : 0 })).sort((a, b) => a.pct - b.pct);
+  return `<section class="card exam-analysis"><h2>Auswertung</h2>
+    ${topics.length > 1 ? `<h3>Nach Thema</h3><ul class="list">${topics.map((t) => `<li><div class="row between"><a href="#/thema/${t.id}">${esc(t.name)}</a><strong>${t.pct} %</strong></div>${progressBar(t.pct, 100)}</li>`).join('')}</ul>` : ''}
+    ${weak.length ? `<h3>Das solltest du repetieren</h3><ul class="list">${weak.map((w) => `<li><span class="badge badge-warn">Aufgabe ${w.nr}</span> ${esc(w.q.prompt.split('\n')[0].slice(0, 140))} <span class="muted small">(${w.points}/${w.maxPoints} P.)</span></li>`).join('')}</ul>
+      <div class="row"><a class="btn" href="#/karten?themen=${[...byTopic.keys()].join(',')}">Karteikarten zu diesen Themen</a></div>`
+      : '<p>Stark: In keiner Aufgabe weniger als die Hälfte der Punkte.</p>'}</section>`;
 }
 
 // ---------- Karteikarten ----------

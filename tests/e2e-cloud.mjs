@@ -415,6 +415,69 @@ try {
     await m.close();
   });
 
+  await check('Lernpakete übernehmen und digitale Probeprüfung mit Timer, Auto-Abgabe, Note und Auswertung', async () => {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const p = await c.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.clock.install();
+    await p.goto(BASE + '/');
+    const all = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith('mock-supabase')).map((k) => [k, localStorage.getItem(k)])));
+    const modul = { id: 'lj2-hkb-c-lf3-verkaufskalkulation', kategorie: 'modul', year: 'lj2', hkb: 'hkb-c', lf: 'lf3', title: 'Verkaufskalkulation', subject: 'HKB c · 2. Lehrjahr', topic: 'Verkaufskalkulation',
+      sources: [{ title: 'Merkblatt: Verkaufskalkulation', content: '## Kalkulationsschema\n| Position | CHF |\n| --- | --- |\n| Einstandspreis | 200.00 |' }],
+      cards: [{ term: 'Selbstkosten', def: 'Einstandspreis plus Gemeinkosten' }, { term: 'Nettoerlös', def: 'Selbstkosten plus Reingewinn' }],
+      contents: [{ type: 'quiz', title: 'Übung: Verkaufskalkulation', data: { questions: [{ type: 'open', points: 2, prompt: 'Was sind Selbstkosten?', model: 'Einstandspreis plus Gemeinkosten', keywords: [] }] } }] };
+    const pruef = { id: 'lj2-allg-pruefungen-hkb-c-sem1', kategorie: 'pruefung', art: 'Probeprüfung', year: 'lj2', hkb: 'hkb-c', title: 'Probeprüfung HKB c – 1. Semester', subject: 'Allgemeines · 2. Lehrjahr', topic: 'Probeprüfung HKB c – 1. Semester', sources: [], cards: [],
+      contents: [{ type: 'exam', title: 'Probeprüfung HKB c – 1. Semester', data: { zeit: 1, hilfsmittel: 'Taschenrechner', intro: '## Ausgangslage\nDu arbeitest im **Tourismusbüro**.', questions: [
+        { type: 'open', points: 2, prompt: 'Nenne die Formel für die Selbstkosten.', model: 'Einstandspreis plus Gemeinkosten', keywords: [] },
+        { type: 'open', points: 4, prompt: 'Berechne den Bruttogewinn.\na) Einstandspreis 200\nb) Nettoerlös 330', model: 'Bruttogewinn = 330 − 200 = CHF 130', keywords: [] }] } }] };
+    const index = { version: 't', pakete: [modul, pruef].map((x) => ({ id: x.id, kategorie: x.kategorie, art: x.art || '', year: x.year, hkb: x.hkb, lf: x.lf || null, title: x.title, hkbLabel: 'HKB c', lfLabel: x.lf ? 'Lernfeld 3' : '', cards: x.cards.length, questions: x.contents.reduce((s, y) => s + y.data.questions.length, 0), sources: x.sources.length, exam: x.kategorie === 'pruefung' })) };
+    await p.evaluate(({ ls, files }) => { for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v); for (const [k, v] of Object.entries(files)) localStorage.setItem('mock-paket:' + k, JSON.stringify(v)); },
+      { ls: all, files: { 'index.json': index, [modul.id + '.json']: modul, [pruef.id + '.json']: pruef } });
+    await p.goto(BASE + '/#/faecher'); await p.reload();
+    await p.waitForSelector('a[href="#/pakete"]');
+    await p.click('a[href="#/pakete"]');
+    await p.waitForSelector('.pakete-gruppe');
+    assert.equal(await p.getAttribute('[data-year="lj2"]', 'aria-selected'), 'true', 'eigenes Lehrjahr vorgewählt');
+    assert.match(await p.innerText('main'), /HKB c · Lernfeld 3[\s\S]*Verkaufskalkulation[\s\S]*Merkblatt · 2 Karten · 1 Aufgabe/);
+    await p.click('[data-kat="pruefung"]');
+    assert.doesNotMatch(await p.innerText('main'), /Verkaufskalkulation\n/);
+    await p.click('[data-kat="alle"]');
+    await p.fill('#pk-q', 'kalkulation');
+    assert.equal(await p.locator('input[data-id]').count(), 1, 'Suche filtert');
+    await p.fill('#pk-q', '');
+    await assertReadable(p, 'Lernpakete');
+    await p.screenshot({ path: path.join(SHOTS, 'cloud-pakete.png'), fullPage: true });
+    await p.locator('[data-all]').nth(0).click(); await p.locator('[data-all]').nth(1).click();
+    assert.match(await p.innerText('#pk-count'), /2 Pakete ausgewählt/);
+    await p.click('#pk-go');
+    await p.waitForSelector('.toast:has-text("übernommen")');
+    assert.equal(await p.locator('.badge-ok:has-text("übernommen")').count(), 2);
+    const data = (await mockState(p)).rows[(await mockState(p)).session.user.id].data;
+    assert.ok(data.subjects.some((x) => x.name === 'HKB c · 2. Lehrjahr'));
+    assert.equal(data.cards.filter((x) => x.paketId === modul.id).length, 2);
+    const exam = data.contents.find((x) => x.paketId === pruef.id);
+    assert.equal(exam.type, 'exam');
+    // Digitale Probeprüfung
+    await p.goto(BASE + '/#/inhalt/' + exam.id);
+    await p.waitForSelector('#timer-start');
+    assert.match(await p.innerText('main'), /Hilfsmittel: Taschenrechner[\s\S]*Ausgangslage[\s\S]*Tourismusbüro/);
+    await p.fill('[data-q="0"] textarea', 'Einstandspreis plus Gemeinkosten');
+    await p.click('#timer-start');
+    await p.waitForSelector('.timer-clock');
+    assert.match(await p.innerText('.timer-clock'), /0[01]:\d\d/);
+    await assertReadable(p, 'Prüfung mit Timer');
+    await p.clock.fastForward('01:05');
+    await p.waitForSelector('#finish');
+    assert.match(await p.innerText('main'), /Abgegeben nach 1 Min\./);
+    await p.click('#finish');
+    await p.waitForSelector('.exam-analysis');
+    assert.match(await p.innerText('.result-hero'), /\/ 6[\s\S]*Note ca\./);
+    assert.match(await p.innerText('.exam-analysis'), /repetieren[\s\S]*Aufgabe 2/);
+    await assertReadable(p, 'Prüfungsauswertung');
+    await p.screenshot({ path: path.join(SHOTS, 'cloud-pruefung.png'), fullPage: true });
+    await c.close();
+  });
+
   await check('Schul-E-Mail-Adresse: Registrierung nur mit @stud.kvchur.ch, Bestätigung per E-Mail, Ablage nur für Schulkonten', async () => {
     const c = await browser.newContext(); const p = await c.newPage();
     p.on('pageerror', (e) => errors.push(e.message));

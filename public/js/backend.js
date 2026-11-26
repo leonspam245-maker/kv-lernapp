@@ -279,3 +279,21 @@ export async function setLibraryHidden(id, hidden) {
   const { error } = await sb.from('library_items').update({ hidden }).eq('id', id);
   if (error) throw libError('Der Eintrag konnte nicht geändert werden.');
 }
+
+// ---------- Lernpakete (nur online, nur Schulkonten) ----------
+// Fertige Pakete liegen als JSON im privaten Speicher «pakete»: index.json (Übersicht) und <id>.json
+async function paketDatei(name) {
+  const { data, error } = await sb.storage.from('pakete').download(name);
+  if (error || !data) throw libError('Die Lernpakete konnten nicht geladen werden. Bitte später erneut versuchen.');
+  return JSON.parse(await data.text());
+}
+/** Übersicht aller Lernpakete: { version, pakete:[{id, kategorie, year, hkb, lf, title, cards, questions, sources, …}] } */
+export async function paketeIndex() {
+  if (!isCloud()) return null;
+  return paketDatei('index.json');
+}
+/** Ein Lernpaket mit Inhalt */
+export async function paketLaden(id) {
+  if (!/^[a-z0-9-]{1,80}$/.test(id)) throw libError('Ungültiges Lernpaket.');
+  return paketDatei(`${id}.json`);
+}

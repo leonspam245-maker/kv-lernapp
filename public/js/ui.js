@@ -6,6 +6,7 @@ export const ORIGIN = {
   mykv: { label: 'myKV', short: 'myKV' },
   quizlet: { label: 'Quizlet', short: 'Quizlet' },
   onenote: { label: 'OneNote', short: 'OneNote' },
+  paket: { label: 'Lernpaket KV-Learn', short: 'Lernpaket' },
 };
 export const KIND_MYKV = { lernziele: 'Lernziele', aufgaben: 'Aufgaben', notizen: 'Notizen', unterlage: 'Unterlage', link: 'Link' };
 

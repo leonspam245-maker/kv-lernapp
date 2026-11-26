@@ -129,6 +129,17 @@
         return { data: [], error: null };
       },
     };
+    // Lernpakete: Dateien unter localStorage «mock-paket:<name>», lesbar nur für Schulkonten (wie die Speicher-Regel)
+    const member = () => { const db = load(); const u = db.users.find((x) => x.id === uid()); const doms = db.config?.domains || [];
+      return Boolean(u) && (db.admin === u.id || (u.confirmed !== false && (!doms.length || doms.includes(u.email.split('@').pop())))); };
+    const paketStorage = {
+      async download(name) {
+        await delay();
+        const raw = localStorage.getItem('mock-paket:' + name);
+        if (!member() || raw == null) return err('Object not found', '404');
+        return { data: new Blob([raw], { type: 'application/json' }), error: null };
+      },
+    };
     return {
       auth,
       from(table) {
@@ -156,7 +167,7 @@
           },
         };
       },
-      storage: { from: () => storage },
+      storage: { from: (bucket) => (bucket === 'pakete' ? paketStorage : storage) },
       async rpc(name, args = {}) {
         await delay();
         if (name === 'is_admin') return { data: Boolean(uid()) && load().admin === uid(), error: null };

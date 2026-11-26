@@ -9,6 +9,7 @@ import { practiceView, contentView, cardsView } from './practice.js';
 import { planListView, examFormView, examPlanView, toggleUnit, unitStartLink, routeHtml } from './plan.js';
 import { settingsView } from './settings.js';
 import { ablageView } from './ablage.js';
+import { paketeView } from './pakete.js';
 import { initBackend, currentUser, isCloud, isRecovery, recoveryLinkError, justConfirmed } from './backend.js';
 import { loginView, newPasswordView } from './auth.js';
 
@@ -29,6 +30,7 @@ const ROUTES = [
   [/^pruefung\/neu$/, examFormView, 'plan'],
   [/^pruefung\/([\w-]+)\/bearbeiten$/, examFormView, 'plan'],
   [/^pruefung\/([\w-]+)$/, examPlanView, 'plan'],
+  [/^pakete$/, paketeView, 'faecher'],
   [/^ablage$/, ablageView, 'ablage'],
   [/^ablage\/(lj[123](?:\/[a-z0-9-]+)?)$/, ablageView, 'ablage'],
   [/^einstellungen$/, settingsView, 'einstellungen'],
@@ -222,7 +224,7 @@ function subjectsView(el) {
   const db = store.db;
   el.innerHTML = `
     <div class="page-head"><div><h1>Fächer</h1><p>Lege Fächer und Themen an und ordne ihnen deine Unterlagen zu.</p></div>
-      <a class="btn btn-primary" href="#/import">Material importieren</a></div>
+      <div class="row"><a class="btn" href="#/pakete">Lernpakete</a><a class="btn btn-primary" href="#/import">Material importieren</a></div></div>
     <section class="card">
       ${db.subjects.length ? `<ul class="list">${db.subjects.slice().sort((a, b) => a.name.localeCompare(b.name, 'de-CH')).map((s) => {
         const topics = topicsOf(s.id);
