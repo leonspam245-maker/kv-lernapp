@@ -76,7 +76,7 @@ function block(b) {
     case 'begriffe': return (b.h ? h : '<h2>Wichtige Begriffe</h2>') + `<table><thead><tr><th>Begriff</th><th>Bedeutung</th></tr></thead><tbody>${b.items.map(([t, d]) => `<tr><td class="term">${esc(t)}</td><td>${rich(d)}</td></tr>`).join('')}</tbody></table>`;
     case 'beispiel': return `<div class="box beispiel"><h3>${esc(b.h || 'Beispiel aus der Praxis')}</h3>${(Array.isArray(b.text) ? b.text : [b.text]).map((t) => `<p>${rich(t)}</p>`).join('')}</div>`;
     case 'merke': return `<div class="box merke"><h3>${esc(b.h || 'Merke')}</h3><ul>${b.items.map((i) => `<li>${rich(i)}</li>`).join('')}</ul></div>`;
-    case 'formel': return `<div class="box formel">${b.h ? `<h3>${esc(b.h)}</h3>` : ''}${(Array.isArray(b.text) ? b.text : [b.text]).map((t) => `<p>${esc(t)}</p>`).join('')}</div>`;
+    case 'formel': return `<div class="box formel">${b.h ? `<h3>${esc(b.h)}</h3>` : ''}${(Array.isArray(b.text) ? b.text : [b.text]).map((t) => `<p>${rich(t)}</p>`).join('')}</div>`;
     default: throw new Error('Unbekannter Block: ' + b.type);
   }
 }
