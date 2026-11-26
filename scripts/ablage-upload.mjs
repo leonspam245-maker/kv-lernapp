@@ -1,5 +1,6 @@
 // Lädt die erstellten Lernblatt-PDFs in die gemeinsame Ablage (Edge Function «ablage-import»).
-// Aufruf: IMPORT_UPLOADER=<admin-uuid> node scripts/ablage-upload.mjs [filter]
+// Aufruf: IMPORT_UPLOADER=<admin-uuid> [REPLACE=1] node scripts/ablage-upload.mjs [filter ...]
+// REPLACE=1 ersetzt vorhandene Einträge gleichen Titels (neue Fassung eines Blatts).
 // Der Einmal-Schlüssel liegt in lernblaetter/.import-token (nicht im Repository). Bereits vorhandene Einträge werden übersprungen.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,9 +14,9 @@ const token = fs.readFileSync(path.join(ROOT, 'lernblaetter', '.import-token'), 
 const uploader = process.env.IMPORT_UPLOADER;
 if (!uploader) throw new Error('IMPORT_UPLOADER fehlt');
 
-const filter = process.argv[2] || '';
-const files = fs.readdirSync(IN).filter((f) => f.endsWith('.json') && f.includes(filter)).sort();
-let ok = 0, skip = 0; const fail = [];
+const filters = process.argv.slice(2);
+const files = fs.readdirSync(IN).filter((f) => f.endsWith('.json') && (!filters.length || filters.some((x) => f.includes(x)))).sort();
+let ok = 0, skip = 0, repl = 0; const fail = [];
 for (const f of files) {
   const d = JSON.parse(fs.readFileSync(path.join(IN, f), 'utf8'));
   const pdf = path.join(PDF, d.folder.replace('/', '__'), f.replace(/\.json$/, '.pdf'));
@@ -28,13 +29,14 @@ for (const f of files) {
     file_name: f.replace(/\.json$/, '.pdf'),
     b64: fs.readFileSync(pdf).toString('base64'),
     uploader_id: uploader,
+    replace: process.env.REPLACE === '1',
   };
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-import-token': token }, body: JSON.stringify(body) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(`${res.status} ${j.error || ''}`);
-      if (j.skipped) skip++; else ok++;
+      if (j.skipped) skip++; else if (j.replaced) repl++; else ok++;
       break;
     } catch (e) {
       if (attempt === 3) fail.push(`${f}: ${e.message}`);
@@ -42,5 +44,5 @@ for (const f of files) {
     }
   }
 }
-console.log(`${ok} hochgeladen, ${skip} schon vorhanden${fail.length ? `, ${fail.length} Fehler:\n  ` + fail.join('\n  ') : ''}`);
+console.log(`${ok} neu hochgeladen, ${repl} ersetzt, ${skip} übersprungen${fail.length ? `, ${fail.length} Fehler:\n  ` + fail.join('\n  ') : ''}`);
 if (fail.length) process.exitCode = 1;
