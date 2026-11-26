@@ -284,6 +284,22 @@ try {
     assert.equal(await page.locator('.nav a[data-nav=ablage]').getAttribute('class'), 'active');
     await assertReadable(page, 'Ablage Übersicht');
     await page.screenshot({ path: path.join(SHOTS, 'cloud-ablage-1-uebersicht.png'), fullPage: true });
+    // Lernfelder als Unterordner, gegliedert wie die Lernmodule in myKV
+    assert.match(await page.locator('.ablage-year').nth(2).innerText(), /Option Finanzen[\s\S]*Option Technologie/);
+    await page.click('a[href="#/ablage/lj1/hkb-c"]');
+    await page.waitForSelector('a[href="#/ablage/lj1/hkb-c-lf4"]');
+    assert.match(await page.innerText('main'), /Lernfeld 4[\s\S]*Kaufvertrag[\s\S]*Lernfeld 5[\s\S]*Übergreifend zu HKB c/);
+    await page.click('a[href="#/ablage/lj1/hkb-c-lf4"]');
+    await page.waitForSelector('.ablage-chips');
+    assert.match(await page.textContent('h1'), /HKB c · Lernfeld 4/);
+    assert.match(await page.innerText('.ablage-chips'), /Grundlagen des Rechts[\s\S]*Verträge auf Arbeitsleistung/);
+    assert.match(await page.innerText('.eyebrow'), /Ablage › 1\. Lehrjahr › HKB c/);
+    await page.click('#lib-add');
+    assert.equal(await page.inputValue('#lib-folder'), 'lj1/hkb-c-lf4', 'Lernfeld vorausgewählt');
+    await assertReadable(page, 'Ablage Lernfeld');
+    await page.screenshot({ path: path.join(SHOTS, 'cloud-ablage-0-lernfeld.png'), fullPage: true });
+    await page.goto(BASE + '/#/ablage');
+    await page.waitForSelector('.ablage-year');
     await page.click('a[href="#/ablage/lj2/hkb-d"]');
     await page.waitForSelector('#lib-add');
     assert.match(await page.textContent('h1'), /HKB d/);

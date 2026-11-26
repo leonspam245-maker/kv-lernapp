@@ -6,6 +6,7 @@ import { toast, confirmDialog, emptyState } from './ui.js';
 import { isCloud, isSchoolMember, listLibrary, isLibraryAdmin, uploadLibraryItem, libraryFileUrl, libraryFile, reportLibraryItem, deleteLibraryItem, setLibraryHidden } from './backend.js';
 import { importFromLibrary } from './import.js';
 import { setLeaveGuard } from './app.js';
+import { MYKV } from './mykv-struktur.js';
 
 export const YEARS = [['lj1', '1. Lehrjahr'], ['lj2', '2. Lehrjahr'], ['lj3', '3. Lehrjahr']];
 const HKB = [
@@ -21,11 +22,26 @@ const EXTRA = [
   ['allgemein', 'Allgemeines', 'Lerntechnik, Stundenpläne, Vorlagen und Übergreifendes'],
 ];
 const QV = ['qv', 'Qualifikationsverfahren (QV)', 'Prüfungsvorbereitung, Probeprüfungen und Hinweise zum QV'];
+// Optionen im 3. Lehrjahr (wie in myKV)
+const OPTIONS = [
+  ['option-finanzen', 'Option Finanzen', 'Buchhaltung vertiefen an einem Gesamtfall'],
+  ['option-kommunikation', 'Option Kommunikation Landessprache', 'Kommunikative Fähigkeiten in der Landessprache'],
+  ['option-technologie', 'Option Technologie', 'Websites, Datenbanken und digitale Werkzeuge'],
+];
 
-/** Ordner eines Lehrjahres: [id, Kurzname, Beschreibung] */
-export const foldersOf = (year) => [...HKB, ...EXTRA, ...(year === 'lj3' ? [QV] : [])].map(([id, short, long]) => ({ id: `${year}/${id}`, short, long }));
+/** Hauptordner eines Lehrjahres */
+export const foldersOf = (year) => [...HKB, ...(year === 'lj3' ? OPTIONS : []), ...EXTRA, ...(year === 'lj3' ? [QV] : [])].map(([id, short, long]) => ({ id: `${year}/${id}`, short, long }));
+const lfLabel = (k) => (k.startsWith('glf') ? `Grundlagenlernfeld ${k.slice(3)}` : `Lernfeld ${k.slice(2)}`);
+/** Unterordner eines HKB: die Lernfelder aus myKV mit ihren Modulen */
+export const subfoldersOf = (folderId) => {
+  const [year, hkb] = folderId.split('/');
+  return Object.entries(MYKV[year]?.[hkb] || {}).map(([k, modules]) => ({ id: `${folderId}-${k}`, short: lfLabel(k), long: modules.join(' · '), modules, parent: folderId }));
+};
+const allFolders = (year) => foldersOf(year).flatMap((f) => [f, ...subfoldersOf(f.id)]);
 const yearLabel = (year) => YEARS.find(([y]) => y === year)?.[1] || year;
-const folderInfo = (folder) => foldersOf(folder.split('/')[0]).find((f) => f.id === folder);
+const folderInfo = (folder) => allFolders(folder.split('/')[0]).find((f) => f.id === folder);
+/** Pfadangabe für Trefferlisten, z. B. «HKB c · Lernfeld 4» */
+const folderPath = (f) => (f.parent ? `${folderInfo(f.parent).short} · ${f.short}` : f.short);
 
 // Erlaubte Formate (gleiche Liste wie im Speicher von Supabase)
 const TYPES = {
@@ -78,7 +94,8 @@ export function ablageView(el, param = '', query = {}) {
   });
 }
 
-const countIn = (prefix) => cache.items.filter((i) => i.folder === prefix || i.folder.startsWith(prefix + '/')).length;
+// Anzahl Dateien in einem Ordner samt Unterordnern (Lehrjahr «lj1», HKB «lj1/hkb-a» oder Lernfeld «lj1/hkb-a-lf1»)
+const countIn = (id) => cache.items.filter((i) => i.folder === id || i.folder.startsWith(id + (id.includes('/') ? '-' : '/'))).length;
 const myYear = () => { const y = Number(store.db?.settings?.profile?.apprenticeshipYear || store.user?.user_metadata?.apprenticeshipYear); return y >= 1 && y <= 3 ? `lj${y}` : ''; };
 
 function overview(el) {
@@ -108,7 +125,7 @@ function overview(el) {
 
 function folderLink(f) {
   const n = countIn(f.id);
-  return `<li><a class="list-link" href="#/ablage/${f.id}"><span><span class="title">${esc(f.short)}</span><br><span class="meta">${esc(f.long)}</span></span><span class="badge${n ? ' badge-accent' : ''}">${n}</span><span aria-hidden="true">›</span></a></li>`;
+  return `<li><a class="list-link" href="#/ablage/${f.id}"><span><span class="title">${esc(f.short)}</span><br><span class="meta${f.modules ? ' ablage-modules' : ''}">${f.modules ? 'myKV: ' : ''}${esc(f.long)}</span></span><span class="badge${n ? ' badge-accent' : ''}">${n}</span><span aria-hidden="true">›</span></a></li>`;
 }
 
 function yearView(el, year) {
@@ -120,12 +137,20 @@ function yearView(el, year) {
 function folderView(el, folder) {
   const f = folderInfo(folder);
   const year = folder.split('/')[0];
+  const parent = f.parent ? folderInfo(f.parent) : null;
+  const subs = subfoldersOf(folder);
   const items = cache.items.filter((i) => i.folder === folder);
+  const empty = emptyState('Noch leer', subs.length
+    ? 'Hier liegen Dateien, die den ganzen HKB betreffen. Für ein bestimmtes Thema wähle oben das passende Lernfeld.'
+    : 'In diesem Ordner liegt noch nichts. Teile eine eigene Zusammenfassung oder ein Handout, das du weitergeben darfst.');
   el.innerHTML = `
-    <div class="page-head"><div><div class="eyebrow"><a href="#/ablage">Ablage</a> › <a href="#/ablage/${year}">${yearLabel(year)}</a></div><h1>${esc(f.short)}</h1><p>${esc(f.long)}</p></div>
+    <div class="page-head"><div><div class="eyebrow"><a href="#/ablage">Ablage</a> › <a href="#/ablage/${year}">${yearLabel(year)}</a>${parent ? ` › <a href="#/ablage/${parent.id}">${esc(parent.short)}</a>` : ''}</div>
+      <h1>${esc(parent ? `${parent.short} · ${f.short}` : f.short)}</h1>
+      ${f.modules ? `<p>Passende Module in myKV:</p><ul class="ablage-chips">${f.modules.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : `<p>${esc(f.long)}</p>`}</div>
       <button class="btn btn-primary" id="lib-add" aria-expanded="false">Datei hochladen</button></div>
     <div id="lib-upload"></div>
-    <section class="card">${items.length ? itemList(items) : emptyState('Noch leer', 'In diesem Ordner liegt noch nichts. Teile eine eigene Zusammenfassung oder ein Handout, das du weitergeben darfst.')}</section>`;
+    ${subs.length ? `<section class="card"><h2>Lernfelder</h2><p class="small muted">Gegliedert wie die Lernmodule in myKV.</p><ul class="list">${subs.map((s2) => folderLink(s2)).join('')}</ul></section>` : ''}
+    <section class="card">${subs.length ? `<h2>Übergreifend zu ${esc(f.short)}</h2>` : ''}${items.length ? itemList(items) : empty}</section>`;
   const btn = el.querySelector('#lib-add');
   btn.addEventListener('click', () => {
     const box = el.querySelector('#lib-upload');
@@ -140,14 +165,14 @@ function itemList(items, showFolder = false) {
   const me = store.user?.id;
   return `<ul class="list ablage-items">${items.map((i) => {
     const own = i.uploader_id === me;
-    const f = showFolder ? folderInfo(i.folder) : null;
+    const f = showFolder ? folderInfo(i.folder) : null; // unbekannter Ordner (z. B. alte Struktur): ohne Pfad anzeigen
     return `<li data-item="${esc(i.id)}">
       <div class="ablage-item">
         <span class="ablage-type" aria-hidden="true">${esc(extOf(i.file_name).toUpperCase() || 'DATEI')}</span>
         <div class="ablage-body">
           <p class="title">${esc(i.title)} ${i.hidden ? '<span class="badge badge-warn">Ausgeblendet</span>' : ''}</p>
           ${i.description ? `<p class="ablage-desc">${esc(i.description)}</p>` : ''}
-          <p class="meta">${f ? `<a href="#/ablage/${esc(i.folder)}">${yearLabel(i.folder.split('/')[0])} · ${esc(f.short)}</a> · ` : ''}${typeLabel(i)} · ${fmtSize(i.size_bytes)} · von ${esc(i.uploader_name || 'Anonym')}${own ? ' (du)' : ''} · ${fmtDate(i.created_at.slice(0, 10))}${cache.admin && i.report_count ? ` · ${plural(i.report_count, 'Meldung', 'Meldungen')}` : ''}</p>
+          <p class="meta">${f ? `<a href="#/ablage/${esc(i.folder)}">${yearLabel(i.folder.split('/')[0])} · ${esc(folderPath(f))}</a> · ` : ''}${typeLabel(i)} · ${fmtSize(i.size_bytes)} · von ${esc(i.uploader_name || 'Anonym')}${own ? ' (du)' : ''} · ${fmtDate(i.created_at.slice(0, 10))}${cache.admin && i.report_count ? ` · ${plural(i.report_count, 'Meldung', 'Meldungen')}` : ''}</p>
           ${i.hidden && own && !cache.admin ? '<p class="small muted">Nach Meldungen ausgeblendet. Nur du siehst den Eintrag, bis er geprüft ist.</p>' : ''}
           <div class="row ablage-actions">
             <button class="btn btn-small btn-primary" data-act="open">Öffnen</button>
@@ -250,9 +275,14 @@ function uploadForm(box, folder, onDone) {
     const y = form.querySelector('#lib-year').value;
     const sel = form.folder;
     const keep = sel.value || folder;
-    sel.innerHTML = foldersOf(y).map((f) => `<option value="${f.id}">${esc(f.short)} – ${esc(f.long)}</option>`).join('');
+    // Hauptordner; HKB mit Lernfeldern als Gruppe (HKB übergreifend + einzelne Lernfelder)
+    sel.innerHTML = foldersOf(y).map((f) => {
+      const subs = subfoldersOf(f.id);
+      if (!subs.length) return `<option value="${f.id}">${esc(f.short)} – ${esc(f.long)}</option>`;
+      return `<optgroup label="${esc(f.short)} – ${esc(f.long)}"><option value="${f.id}">${esc(f.short)} übergreifend</option>${subs.map((s2) => `<option value="${s2.id}">${esc(f.short)} · ${esc(s2.short)} (${esc(s2.modules.slice(0, 2).join(', '))}${s2.modules.length > 2 ? ' …' : ''})</option>`).join('')}</optgroup>`;
+    }).join('');
     const same = `${y}/${keep.split('/')[1]}`;
-    if (foldersOf(y).some((f) => f.id === same)) sel.value = same;
+    if (allFolders(y).some((f) => f.id === same)) sel.value = same;
   };
   fillFolders();
   form.querySelector('#lib-year').addEventListener('change', fillFolders);
