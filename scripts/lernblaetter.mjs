@@ -65,6 +65,23 @@ td.term { font-weight: 700; width: 34%; }
 .pagebreak { break-before: page; padding-top: 10mm; }
 .total { text-align: right; font-weight: 700; margin: 0 0 4mm; font-size: 9.5pt; }
 .note { font-size: 8.5pt; color: #5E5853; margin-top: 6mm; }
+.small-pt { font-size: 8.5pt; color: #B5301B; font-weight: 700; }
+table.kopf td { border: 1px solid #CFC4BA; padding: 2.5mm; background: #fff !important; }
+table.kopf td:nth-child(odd) { font-weight: 700; width: 18%; background: #FBF6F1 !important; }
+table.skala th, table.skala td { text-align: center; padding: 1.5mm; font-size: 9pt; }
+ul.check { list-style: none; padding-left: 0; } ul.check li { display: flex; gap: 3mm; align-items: flex-start; margin-bottom: 2mm; }
+.box-cb { flex: none; width: 4mm; height: 4mm; border: 1.5px solid #1D1B1A; border-radius: 1mm; margin-top: .6mm; }
+table.leer td { height: 9mm; border: 1px solid #CFC4BA; background: #fff !important; }
+.felder .feld { margin-bottom: 3mm; break-inside: avoid; } .felder .feld > span { font-weight: 700; } .felder .lines { margin-left: 0; }
+.kartenseite { break-before: page; padding-top: 4mm; }
+.kartenseite.erste { break-before: auto; }
+.karte { break-inside: avoid; } .krow { break-inside: avoid; }
+.kinfo { font-size: 8.5pt; color: #5E5853; margin: 0 0 2mm; }
+.krow { display: flex; }
+.karte { width: 50%; height: 47mm; border: 1px dashed #9E948B; padding: 4mm 5mm; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10.5pt; overflow: hidden; }
+.karte.vorne { font-weight: 700; font-size: 12pt; }
+.karte.hinten { background: #FBF6F1; }
+.karte.leer { border-color: transparent; }
 `;
 
 function block(b) {
@@ -77,43 +94,98 @@ function block(b) {
     case 'beispiel': return `<div class="box beispiel"><h3>${esc(b.h || 'Beispiel aus der Praxis')}</h3>${(Array.isArray(b.text) ? b.text : [b.text]).map((t) => `<p>${rich(t)}</p>`).join('')}</div>`;
     case 'merke': return `<div class="box merke"><h3>${esc(b.h || 'Merke')}</h3><ul>${b.items.map((i) => `<li>${rich(i)}</li>`).join('')}</ul></div>`;
     case 'formel': return `<div class="box formel">${b.h ? `<h3>${esc(b.h)}</h3>` : ''}${(Array.isArray(b.text) ? b.text : [b.text]).map((t) => `<p>${rich(t)}</p>`).join('')}</div>`;
+    case 'checkliste': return h + `<ul class="check">${b.items.map((i) => `<li><span class="box-cb"></span>${rich(i)}</li>`).join('')}</ul>`;
+    case 'felder': return h + (b.head
+      ? `<table class="leer"><thead><tr>${b.head.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${(b.rows || []).map((r) => `<tr>${r.map((c) => `<td>${rich(c)}</td>`).join('')}</tr>`).join('')}${Array.from({ length: b.leer ?? 6 }, () => `<tr>${b.head.map(() => '<td>&nbsp;</td>').join('')}</tr>`).join('')}</tbody></table>`
+      : `<div class="felder">${b.items.map((i) => `<div class="feld"><span>${rich(i)}</span><div class="lines">${'<div></div>'.repeat(b.linien ?? 1)}</div></div>`).join('')}</div>`);
+    case 'karten': {
+      // Je Seite 10 Karten (2 × 5); Rückseiten auf der folgenden Seite gespiegelt, damit sie beim beidseitigen Druck passen
+      const pages = [];
+      for (let i = 0; i < b.items.length; i += 10) pages.push(b.items.slice(i, i + 10));
+      return (b.h ? h : '') + pages.map((pg, pi) => {
+        const rows = []; for (let i = 0; i < pg.length; i += 2) rows.push(pg.slice(i, i + 2));
+        const front = rows.map((r) => `<div class="krow">${r.map(([v]) => `<div class="karte vorne">${rich(v)}</div>`).join('')}${r.length < 2 ? '<div class="karte leer"></div>' : ''}</div>`).join('');
+        const back = rows.map((r) => `<div class="krow">${r.length < 2 ? '<div class="karte leer"></div>' : ''}${r.slice().reverse().map(([, z]) => `<div class="karte hinten">${rich(z)}</div>`).join('')}</div>`).join('');
+        return `<section class="kartenseite${pi === 0 ? ' erste' : ''}"><p class="kinfo">Vorderseiten – entlang der Linien ausschneiden</p>${front}</section><section class="kartenseite"><p class="kinfo">Rückseiten – für beidseitigen Druck gespiegelt angeordnet</p>${back}</section>`;
+      }).join('');
+    }
     default: throw new Error('Unbekannter Block: ' + b.type);
   }
 }
 
-function html(d) {
-  const crumb = [YEAR[d.year], d.hkb?.replace('hkb-', 'HKB ').replace(/ ([a-e])$/, (m, x) => ' ' + x), lfLabel(d.lf), d.modul && `Modul «${d.modul}»`].filter(Boolean).join(' · ');
-  const kind = d.kind === 'uebung' ? 'Übungsblatt' : 'Merkblatt';
+const SUB = { pruefungen: 'Probeprüfungen', zusammenfassungen: 'Zusammenfassungen', formeln: 'Formelsammlungen', lerntechnik: 'Lerntechnik & Vorlagen', lernkarten: 'Lernkarten', fallstudien: 'Fallstudien', quiz: 'Quiz & Rätsel' };
+const LABEL = { merkblatt: 'Merkblatt', uebung: 'Übungsblatt', pruefung: 'Probeprüfung', blatt: 'Lernblatt' };
+const paras = (t) => (Array.isArray(t) ? t : [t]).map((x) => `<p>${rich(x)}</p>`).join('');
+// Note nach Schweizer Formel: Punkte / Maximum × 5 + 1, auf halbe Noten gerundet. Mindestpunktzahl je Note, auf halbe Punkte aufgerundet.
+const minPoints = (note, max) => Math.ceil(((note - 1.25) / 5) * max * 2) / 2;
+const notenskala = (max) => `<table class="skala"><thead><tr><th>Note</th>${[6, 5.5, 5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1].map((n) => `<th>${String(n).replace('.', ',')}</th>`).join('')}</tr></thead><tbody><tr><td>ab Punkten</td>${[6, 5.5, 5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1].map((n) => `<td>${n === 1 ? 0 : String(Math.max(0, minPoints(n, max))).replace('.', ',')}</td>`).join('')}</tr></tbody></table>`;
+
+function aufgabenHtml(d) {
+  return d.aufgaben.map((a, i) => `<div class="aufgabe"><div class="q"><span class="nr">${i + 1}</span><div class="txt">${rich(a.frage)}${a.liste ? `<ul>${a.liste.map((x) => `<li>${rich(x)}</li>`).join('')}</ul>` : ''}</div><span class="pt">${a.punkte || ''} P.</span></div><div class="lines">${'<div></div>'.repeat(a.linien ?? 3)}</div></div>`).join('');
+}
+function loesungenHtml(d) {
+  return d.aufgaben.map((a, i) => `<div class="loesung"><span class="nr">${i + 1}</span><div>${paras(a.loesung)}${a.punkte ? `<p class="small-pt">${a.punkte} P.${a.bewertung ? ` – ${rich(a.bewertung)}` : ''}</p>` : ''}</div></div>`).join('');
+}
+
+/** variant: 'aufgaben' oder 'loesungen' (nur bei kind «pruefung») */
+function html(d, variant = null) {
+  const sub = d.folder.match(/^lj[123]\/allgemein-([a-z]+)$/)?.[1];
+  const crumb = sub
+    ? [YEAR[d.year], 'Allgemeines', SUB[sub] || sub, d.thema].filter(Boolean).join(' · ')
+    : [YEAR[d.year], d.hkb?.replace('hkb-', 'HKB ').replace(/ ([a-e])$/, (m, x) => ' ' + x), lfLabel(d.lf), d.modul && `Modul «${d.modul}»`].filter(Boolean).join(' · ');
+  let kind = variant === 'loesungen' ? 'Lösungen' : d.label || LABEL[d.kind] || 'Lernblatt';
   let body = '';
+  const total = d.aufgaben ? d.aufgaben.reduce((s, a) => s + (a.punkte || 0), 0) : 0;
   if (d.kind === 'uebung') {
-    const total = d.aufgaben.reduce((s, a) => s + (a.punkte || 0), 0);
     body += `<p class="total">Total ${total} Punkte · Zeit: ca. ${d.zeit || Math.max(10, Math.round(total * 1.5))} Minuten</p>`;
-    body += d.aufgaben.map((a, i) => `<div class="aufgabe"><div class="q"><span class="nr">${i + 1}</span><div class="txt">${rich(a.frage)}${a.liste ? `<ul>${a.liste.map((x) => `<li>${rich(x)}</li>`).join('')}</ul>` : ''}</div><span class="pt">${a.punkte || ''} P.</span></div><div class="lines">${'<div></div>'.repeat(a.linien ?? 3)}</div></div>`).join('');
-    body += `<section class="pagebreak"><h2>Lösungen</h2>${d.aufgaben.map((a, i) => `<div class="loesung"><span class="nr">${i + 1}</span><div>${(Array.isArray(a.loesung) ? a.loesung : [a.loesung]).map((t) => `<p>${rich(t)}</p>`).join('')}</div></div>`).join('')}</section>`;
+    body += aufgabenHtml(d);
+    body += `<section class="pagebreak"><h2>Lösungen</h2>${loesungenHtml(d)}</section>`;
+  } else if (d.kind === 'pruefung') {
+    if (variant === 'loesungen') {
+      body += `<p class="total">Total ${total} Punkte</p>${loesungenHtml(d)}<h2>Notenskala</h2>${notenskala(total)}`;
+    } else {
+      body += `<table class="kopf"><tbody><tr><td>Name</td><td></td><td>Klasse</td><td></td></tr><tr><td>Datum</td><td></td><td>Punkte</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/ ${total}</td></tr><tr><td>Hilfsmittel</td><td colspan="3">${esc(d.hilfsmittel || 'keine')}</td></tr><tr><td>Zeit</td><td>${d.zeit || Math.max(20, Math.round(total * 1.5))} Minuten</td><td>Note</td><td></td></tr></tbody></table>`;
+      if (d.blocks?.length) body += d.blocks.map(block).join('');
+      body += aufgabenHtml(d);
+    }
   } else body += d.blocks.map(block).join('');
+  const note = d.modul
+    ? `Eigene Zusammenfassung von KV-Learn in eigenen Worten, abgestimmt auf das myKV-Modul «${esc(d.modul)}» und den Bildungsplan Kauffrau/Kaufmann EFZ 2023.`
+    : 'Erstellt von KV-Learn in eigenen Worten, abgestimmt auf den Bildungsplan Kauffrau/Kaufmann EFZ 2023 und die Lernmodule in myKV.';
   return `<!doctype html><html lang="de-CH"><head><meta charset="utf-8"><style>${CSS}</style></head><body><div class="page">
-    <header class="band"><div class="row"><span class="logo">${LOGO}</span><span class="kind">${kind}</span></div>
-      <p class="crumb">${esc(crumb)}</p><h1>${esc(d.title)}</h1>${d.lead ? `<p class="lead">${rich(d.lead)}</p>` : ''}</header>
-    <main>${body}<p class="note">Eigene Zusammenfassung von KV-Learn in eigenen Worten, abgestimmt auf das myKV-Modul${d.modul ? ` «${esc(d.modul)}»` : ''} und den Bildungsplan Kauffrau/Kaufmann EFZ 2023. Stand: 26.11.2026. Ohne Gewähr; massgebend sind die Unterlagen deiner Schule.</p></main>
+    <header class="band"><div class="row"><span class="logo">${LOGO}</span><span class="kind">${esc(kind)}</span></div>
+      <p class="crumb">${esc(crumb)}</p><h1>${esc(variant === 'loesungen' ? `Lösungen: ${d.title}` : d.title)}</h1>${d.lead && variant !== 'loesungen' ? `<p class="lead">${rich(d.lead)}</p>` : ''}</header>
+    <main>${body}<p class="note">${note} Stand: 26.11.2026. Ohne Gewähr; massgebend sind die Unterlagen deiner Schule.</p></main>
   </div></body></html>`;
 }
 
-const filter = process.argv[2] || '';
-const files = fs.readdirSync(IN).filter((f) => f.endsWith('.json') && f.includes(filter)).sort();
-const browser = await chromium.launch();
-const page = await browser.newPage();
-let ok = 0; const fail = [];
-for (const f of files) {
-  try {
-    const d = JSON.parse(fs.readFileSync(path.join(IN, f), 'utf8'));
-    await page.setContent(html(d), { waitUntil: 'load' });
-    const dir = path.join(OUT, d.folder.replace('/', '__'));
-    fs.mkdirSync(dir, { recursive: true });
-    await page.pdf({ path: path.join(dir, f.replace(/\.json$/, '.pdf')), format: 'A4', printBackground: true, displayHeaderFooter: true, headerTemplate: '<span></span>',
-      footerTemplate: `<div style="width:100%;font-family:Arial;font-size:7.5pt;color:#5E5853;padding:0 18mm;display:flex;justify-content:space-between"><span>KV-Learn · ${esc(d.title)}</span><span>Seite <span class="pageNumber"></span> von <span class="totalPages"></span></span></div>`, preferCSSPageSize: true });
-    ok++;
-  } catch (e) { fail.push(`${f}: ${e.message}`); }
+/** PDF-Dateien einer Inhaltsdatei: [Dateiname, Variante, Titel für die Fusszeile] */
+export function outputsOf(f, d) {
+  const base = f.replace(/\.json$/, '');
+  if (d.kind === 'pruefung') return [[`${base}-aufgaben.pdf`, 'aufgaben', d.title], [`${base}-loesungen.pdf`, 'loesungen', `Lösungen: ${d.title}`]];
+  return [[`${base}.pdf`, null, d.title]];
 }
-await browser.close();
-console.log(`${ok} PDF erstellt${fail.length ? `, ${fail.length} Fehler:\n  ` + fail.join('\n  ') : ''}`);
-if (fail.length) process.exitCode = 1;
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const filter = process.argv[2] || '';
+  const files = fs.readdirSync(IN).filter((f) => f.endsWith('.json') && f.includes(filter)).sort();
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  let ok = 0; const fail = [];
+  for (const f of files) {
+    try {
+      const d = JSON.parse(fs.readFileSync(path.join(IN, f), 'utf8'));
+      const dir = path.join(OUT, d.folder.replace('/', '__'));
+      fs.mkdirSync(dir, { recursive: true });
+      for (const [name, variant, title] of outputsOf(f, d)) {
+        await page.setContent(html(d, variant), { waitUntil: 'load' });
+        await page.pdf({ path: path.join(dir, name), format: 'A4', printBackground: true, displayHeaderFooter: true, headerTemplate: '<span></span>',
+          footerTemplate: `<div style="width:100%;font-family:Arial;font-size:7.5pt;color:#5E5853;padding:0 18mm;display:flex;justify-content:space-between"><span>KV-Learn · ${esc(title)}</span><span>Seite <span class="pageNumber"></span> von <span class="totalPages"></span></span></div>`, preferCSSPageSize: true });
+        ok++;
+      }
+    } catch (e) { fail.push(`${f}: ${e.message}`); }
+  }
+  await browser.close();
+  console.log(`${ok} PDF erstellt${fail.length ? `, ${fail.length} Fehler:\n  ` + fail.join('\n  ') : ''}`);
+  if (fail.length) process.exitCode = 1;
+}

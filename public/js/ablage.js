@@ -33,8 +33,19 @@ const OPTIONS = [
 export const foldersOf = (year) => [...HKB, ...(year === 'lj3' ? OPTIONS : []), ...EXTRA, ...(year === 'lj3' ? [QV] : [])].map(([id, short, long]) => ({ id: `${year}/${id}`, short, long }));
 const lfLabel = (k) => (k.startsWith('glf') ? `Grundlagenlernfeld ${k.slice(3)}` : `Lernfeld ${k.slice(2)}`);
 /** Unterordner eines HKB: die Lernfelder aus myKV mit ihren Modulen */
+// Feste Unterordner von «Allgemeines»
+const ALLGEMEIN = [
+  ['pruefungen', 'Probeprüfungen', 'Prüfungen pro HKB und Semester, Lösungen separat'],
+  ['zusammenfassungen', 'Zusammenfassungen', 'Überblick pro HKB, Glossare und Jahresüberblick'],
+  ['formeln', 'Formelsammlungen', 'Rechnen, Excel, Gesetzesartikel und Regeln auf einen Blick'],
+  ['lerntechnik', 'Lerntechnik & Vorlagen', 'Lernmethoden, Lernpläne, Checklisten und Vorlagen'],
+  ['lernkarten', 'Lernkarten', 'Karten zum Ausdrucken und Ausschneiden'],
+  ['fallstudien', 'Fallstudien', 'HKB-übergreifende Praxisfälle aus Tourismus und Büro'],
+  ['quiz', 'Quiz & Rätsel', 'Wissensquiz, Zuordnen, Richtig/Falsch und häufige Fehler'],
+];
 export const subfoldersOf = (folderId) => {
   const [year, hkb] = folderId.split('/');
+  if (hkb === 'allgemein') return ALLGEMEIN.map(([k, short, long]) => ({ id: `${folderId}-${k}`, short, long, parent: folderId }));
   return Object.entries(MYKV[year]?.[hkb] || {}).map(([k, modules]) => ({ id: `${folderId}-${k}`, short: lfLabel(k), long: modules.join(' · '), modules, parent: folderId }));
 };
 const allFolders = (year) => foldersOf(year).flatMap((f) => [f, ...subfoldersOf(f.id)]);
@@ -141,7 +152,7 @@ function folderView(el, folder) {
   const subs = subfoldersOf(folder);
   const items = cache.items.filter((i) => i.folder === folder);
   const empty = emptyState('Noch leer', subs.length
-    ? 'Hier liegen Dateien, die den ganzen HKB betreffen. Für ein bestimmtes Thema wähle oben das passende Lernfeld.'
+    ? (subs[0].modules ? 'Hier liegen Dateien, die den ganzen HKB betreffen. Für ein bestimmtes Thema wähle oben das passende Lernfeld.' : 'Hier liegen Dateien ohne eigenen Unterordner. Die meisten Dateien findest du oben in den Unterordnern.')
     : 'In diesem Ordner liegt noch nichts. Teile eine eigene Zusammenfassung oder ein Handout, das du weitergeben darfst.');
   el.innerHTML = `
     <div class="page-head"><div><div class="eyebrow"><a href="#/ablage">Ablage</a> › <a href="#/ablage/${year}">${yearLabel(year)}</a>${parent ? ` › <a href="#/ablage/${parent.id}">${esc(parent.short)}</a>` : ''}</div>
@@ -149,8 +160,8 @@ function folderView(el, folder) {
       ${f.modules ? `<p>Passende Module in myKV:</p><ul class="ablage-chips">${f.modules.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : `<p>${esc(f.long)}</p>`}</div>
       <button class="btn btn-primary" id="lib-add" aria-expanded="false">Datei hochladen</button></div>
     <div id="lib-upload"></div>
-    ${subs.length ? `<section class="card"><h2>Lernfelder</h2><p class="small muted">Gegliedert wie die Lernmodule in myKV.</p><ul class="list">${subs.map((s2) => folderLink(s2)).join('')}</ul></section>` : ''}
-    <section class="card">${subs.length ? `<h2>Übergreifend zu ${esc(f.short)}</h2>` : ''}${items.length ? itemList(items) : empty}</section>`;
+    ${subs.length ? `<section class="card"><h2>${subs[0].modules ? 'Lernfelder' : 'Unterordner'}</h2>${subs[0].modules ? '<p class="small muted">Gegliedert wie die Lernmodule in myKV.</p>' : ''}<ul class="list">${subs.map((s2) => folderLink(s2)).join('')}</ul></section>` : ''}
+    <section class="card">${subs.length ? `<h2>${subs[0].modules ? `Übergreifend zu ${esc(f.short)}` : 'Weitere Dateien'}</h2>` : ''}${items.length ? itemList(items) : empty}</section>`;
   const btn = el.querySelector('#lib-add');
   btn.addEventListener('click', () => {
     const box = el.querySelector('#lib-upload');
@@ -279,7 +290,7 @@ function uploadForm(box, folder, onDone) {
     sel.innerHTML = foldersOf(y).map((f) => {
       const subs = subfoldersOf(f.id);
       if (!subs.length) return `<option value="${f.id}">${esc(f.short)} – ${esc(f.long)}</option>`;
-      return `<optgroup label="${esc(f.short)} – ${esc(f.long)}"><option value="${f.id}">${esc(f.short)} übergreifend</option>${subs.map((s2) => `<option value="${s2.id}">${esc(f.short)} · ${esc(s2.short)} (${esc(s2.modules.slice(0, 2).join(', '))}${s2.modules.length > 2 ? ' …' : ''})</option>`).join('')}</optgroup>`;
+      return `<optgroup label="${esc(f.short)} – ${esc(f.long)}"><option value="${f.id}">${esc(f.short)} übergreifend</option>${subs.map((s2) => `<option value="${s2.id}">${esc(f.short)} · ${esc(s2.short)}${s2.modules ? ` (${esc(s2.modules.slice(0, 2).join(', '))}${s2.modules.length > 2 ? ' …' : ''})` : ''}</option>`).join('')}</optgroup>`;
     }).join('');
     const same = `${y}/${keep.split('/')[1]}`;
     if (allFolders(y).some((f) => f.id === same)) sel.value = same;

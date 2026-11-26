@@ -298,6 +298,16 @@ try {
     assert.equal(await page.inputValue('#lib-folder'), 'lj1/hkb-c-lf4', 'Lernfeld vorausgewählt');
     await assertReadable(page, 'Ablage Lernfeld');
     await page.screenshot({ path: path.join(SHOTS, 'cloud-ablage-0-lernfeld.png'), fullPage: true });
+    // Allgemeines mit festen Unterordnern (Probeprüfungen, Formelsammlungen …)
+    await page.goto(BASE + '/#/ablage/lj2/allgemein');
+    await page.waitForSelector('a[href="#/ablage/lj2/allgemein-pruefungen"]');
+    assert.match(await page.innerText('main'), /Unterordner[\s\S]*Probeprüfungen[\s\S]*Formelsammlungen[\s\S]*Lernkarten[\s\S]*Fallstudien/);
+    assert.doesNotMatch(await page.innerText('main'), /myKV:/);
+    await page.click('a[href="#/ablage/lj2/allgemein-formeln"]');
+    await page.waitForFunction(() => /Allgemeines · Formelsammlungen/.test(document.querySelector('h1')?.textContent || ''));
+    await page.click('#lib-add');
+    assert.equal(await page.inputValue('#lib-folder'), 'lj2/allgemein-formeln');
+    await assertReadable(page, 'Ablage Allgemeines');
     await page.goto(BASE + '/#/ablage');
     await page.waitForSelector('.ablage-year');
     await page.click('a[href="#/ablage/lj2/hkb-d"]');
