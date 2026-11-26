@@ -176,7 +176,8 @@ try {
     assert.equal(await page.getAttribute('[data-billing="credit"]', 'aria-checked'), 'true', 'Guthaben ist Standard');
     assert.equal(await page.innerText('#credit-balance'), 'CHF 0.00');
     const text = await page.innerText('main');
-    assert.match(text, /Anbieterkosten × 3/);
+    await page.click('#guthaben details.more summary'); // Abrechnungsdetails sind eingeklappt
+    assert.match(await page.innerText('#guthaben'), /Anbieterkosten × 3/);
     assert.match(text, /CHF 5\.00 aufladen[\s\S]*CHF 10\.00 aufladen[\s\S]*CHF 20\.00 aufladen/);
     // ChatGPT hat keinen Guthaben-Zugang (kein Schlüssel des Betreibers)
     await page.click('[data-provider="chatgpt"]');

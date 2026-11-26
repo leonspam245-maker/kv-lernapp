@@ -584,11 +584,11 @@ try {
     const own = await state(c3);
     assert.equal(own.subjects.length, 0, 'neues Konto startet leer');
     assert.equal((await state()).subjects.length, 3, 'erstes Konto unverändert');
-    await p3.goto(BASE + '/#/einstellungen'); await p3.waitForSelector('#logout2');
+    await p3.goto(BASE + '/#/einstellungen'); await p3.waitForSelector('#logout');
     await p3.click('[data-provider="chatgpt"]'); await p3.waitForSelector('#key-form');
     assert.equal(await p3.locator('#key-del').count(), 0, 'kein Schlüssel einer anderen Person');
     assert.match(await p3.innerText('main'), /mia@example\.ch/);
-    await p3.click('#logout2');
+    await p3.click('#logout');
     await p3.waitForSelector('#auth-form');
     assert.equal((await fetch(BASE + '/api/state', { headers: { cookie: await cookieOf(c3) } })).status, 401, 'Sitzung beendet');
     // wieder anmelden

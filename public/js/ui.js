@@ -17,9 +17,17 @@ export function toast(message, type = 'success', opts = {}) {
   el.innerHTML = `<span>${esc(message)}</span>${opts.action ? `<button class="btn-link">${esc(opts.action)}</button>` : ''}<button class="toast-close" aria-label="Meldung schliessen">×</button>`;
   el.querySelector('.toast-close').onclick = () => el.remove();
   if (opts.action) el.querySelector('.btn-link').onclick = () => { opts.onAction?.(); el.remove(); };
+  el.dataset.at = String(Date.now());
+  if (opts.sticky || opts.action || type === 'error') el.dataset.keep = '1';
   box.appendChild(el);
   while (box.children.length > 3) box.firstElementChild.remove(); // höchstens drei Meldungen gleichzeitig
   if (!opts.sticky) setTimeout(() => el.remove(), type === 'error' ? 9000 : 4000);
+}
+
+/** Beim Seitenwechsel: ältere Erfolgsmeldungen entfernen, damit sie die neue Seite nicht verdecken. Fehler und Meldungen mit Aktion bleiben. */
+export function clearStaleToasts(maxAgeMs = 1200) {
+  const now = Date.now();
+  document.querySelectorAll('#toasts .toast').forEach((t) => { if (!t.dataset.keep && now - Number(t.dataset.at || 0) > maxAgeMs) t.remove(); });
 }
 
 export function showSaveState(state) {

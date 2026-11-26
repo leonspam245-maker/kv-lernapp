@@ -42,35 +42,27 @@ export function settingsView(el) {
       <div class="field"><label for="pf-school">Berufsfachschule</label><input type="text" id="pf-school" value="${esc(pr.school ?? '')}" autocomplete="organization"></div>
       <div><button class="btn btn-primary" id="pf-save">Profil speichern</button></div>
     </form>
-    <p class="small muted" style="margin:6px 0 0">Angemeldet als ${esc(store.user?.email || '')} · <button type="button" class="btn-link" id="logout2">Abmelden</button></p>
+    <div class="account-row"><span class="small muted">Angemeldet als ${esc(store.user?.email || '')}</span><button type="button" class="btn btn-small" id="logout">Abmelden</button></div>
   </section>
   <section class="card">
     <h2 style="margin-top:0">KI-Dienst für Lerninhalte (optional)</h2>
     <p>Die App funktioniert vollständig ohne KI: Import, Lernplan, Karteikarten sowie Merkblatt, Quiz und Probeprüfung aus deinen Unterlagen werden lokal erstellt. Optional formuliert ein KI-Dienst verständlichere Merkblätter, abwechslungsreichere Fragen und gekennzeichnete eigene Beispiele.</p>
     <div class="field"><span class="eyebrow">Anbieter</span>
       <div class="tabs" role="radiogroup" aria-label="KI-Anbieter">${Object.entries(PROVIDERS).map(([k, p]) => `<button type="button" role="radio" data-provider="${k}" aria-selected="${provider === k}" aria-checked="${provider === k}">${p.name}</button>`).join('')}</div></div>
-    <h3>Was wird übertragen?</h3>
+    <details class="more">
+    <summary>Was wird übertragen?</summary>
     <ul>
       <li>Nur beim Klick auf «Erstellen» mit der Option «Mit KI» und nach einer Bestätigung.</li>
       <li>Nur der Text der ausgewählten Unterlagen, deren Titel sowie Fach- und Themennamen.</li>
       <li>Nicht übertragen werden: Lernfortschritt, Quizergebnisse, Lernplan, andere Unterlagen, dein Name.</li>
       <li>Die Daten gehen an ${P.name} von ${P.company} (USA). Details: <a href="${P.privacy}" target="_blank" rel="noopener">Datenschutz von ${P.company}</a>.</li>
     </ul>
+    </details>
     ${billing === 'own' ? `<h3>Entstehen Kosten?</h3>
     <p>Ja, sobald du den Dienst nutzt. Die API von ${P.company} wird pro Nutzung abgerechnet und braucht ein eigenes Konto mit Guthaben; ${P.subscription} deckt die API nicht ab. Mit dem eingestellten Modell <code>${esc(P.model)}</code> (Listenpreis ${P.price}) kostet ein Merkblatt aus rund 10 Seiten ungefähr ${P.estimate}. Den genauen Preis zeigt <a href="${P.pricing}" target="_blank" rel="noopener">${P.pricingLabel}</a>; Beträge in CHF sind ungefähr.</p>` : ''}
     ${creditsAvailable() ? `<div class="field"><span class="eyebrow">Bezahlung</span>
       <div class="tabs" role="radiogroup" aria-label="Bezahlung">${[['credit', 'Guthaben'], ['own', 'Eigener Schlüssel']].map(([k, l]) => `<button type="button" role="radio" data-billing="${k}" aria-selected="${billing === k}" aria-checked="${billing === k}">${l}</button>`).join('')}</div></div>` : ''}
-    ${billing === 'credit' ? `
-    <h3>Guthaben</h3>
-    <p>Du bezahlst die KI-Nutzung mit Guthaben, das du per Karte (Stripe) auflädst. Abgerechnet wird pro Erstellung nach tatsächlichem Verbrauch: <strong>Anbieterkosten × ${ci.markup}</strong>, umgerechnet mit ${ci.usdChf} CHF pro USD. Ein Merkblatt aus rund 10 Seiten kostet so etwa CHF ${estChf[0]}–${estChf[1]}. Vor jeder Erstellung wird ein Höchstbetrag reserviert; was nicht verbraucht wird, kommt sofort zurück. Schlägt eine Erstellung fehl, kostet sie nichts.</p>
-    ${ci.providers?.[provider] ? '' : `<div class="notice notice-warn">Für ${P.name} ist noch kein Guthaben-Zugang eingerichtet. Wähle den anderen Anbieter oder nutze einen eigenen Schlüssel.</div>`}
-    <div class="credit-box">
-      <div><span class="eyebrow">Dein Guthaben</span><div class="big-number" id="credit-balance">…</div></div>
-      <div class="row">${(ci.packs || []).map((a) => `<button type="button" class="btn" data-pack="${a}" disabled>${chf(a)} aufladen</button>`).join('')}</div>
-    </div>
-    <label class="check"><input type="checkbox" id="terms-ok"> <span>Ich akzeptiere die <a href="/rechtliches.html#bedingungen" target="_blank" rel="noopener">Bedingungen für das KI-Guthaben</a> und habe die <a href="/rechtliches.html#datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
-    <p class="small muted">Bezahlung über Stripe. Die Kartendaten gibst du nur bei Stripe ein; KV-Learn sieht sie nie. Das Guthaben gilt nur für KI-Erstellungen in dieser App.</p>
-    <div id="credit-ledger"></div>` : `
+    ${billing === 'credit' ? '' : `
     <h3>Dein eigener Schlüssel</h3>
     <p>Mit einem eigenen Schlüssel bezahlst du direkt beim Anbieter, ohne Guthaben bei KV-Learn.</p>
     <ol>
@@ -94,6 +86,26 @@ export function settingsView(el) {
     <p class="small muted" style="margin-top:14px"><a href="/rechtliches.html">Impressum, Bedingungen und Datenschutz</a></p>
   </section>
 
+  ${billing === 'credit' ? `<section class="card" id="guthaben">
+    <h2 style="margin-top:0">Guthaben für den KI-Dienst</h2>
+    <p>Du lädst Guthaben per Karte (Stripe) auf und bezahlst damit jede KI-Erstellung nach tatsächlichem Verbrauch. Ein Merkblatt aus rund 10 Seiten kostet etwa CHF ${estChf[0]}–${estChf[1]}.</p>
+    ${ci.providers?.[provider] ? '' : `<div class="notice notice-warn">Für ${P.name} ist noch kein Guthaben-Zugang eingerichtet. Wähle den anderen Anbieter oder nutze einen eigenen Schlüssel.</div>`}
+    <div class="credit-box">
+      <div><span class="eyebrow">Dein Guthaben</span><div class="big-number" id="credit-balance">…</div></div>
+      <div class="credit-buy">
+        <label class="check"><input type="checkbox" id="terms-ok"> <span>Ich akzeptiere die <a href="/rechtliches.html#bedingungen" target="_blank" rel="noopener">Bedingungen für das KI-Guthaben</a> und habe die <a href="/rechtliches.html#datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
+        <div class="row">${(ci.packs || []).map((a) => `<button type="button" class="btn" data-pack="${a}" disabled>${chf(a)} aufladen</button>`).join('')}</div>
+        <p class="small muted" id="pack-hint" style="margin:8px 0 0">Setze zuerst das Häkchen, dann kannst du aufladen.</p>
+      </div>
+    </div>
+    <details class="more">
+    <summary>So wird abgerechnet</summary>
+    <p>Abgerechnet wird pro Erstellung: <strong>Anbieterkosten × ${ci.markup}</strong>, umgerechnet mit ${ci.usdChf} CHF pro USD. Vor jeder Erstellung wird ein Höchstbetrag reserviert; was nicht verbraucht wird, kommt sofort zurück. Schlägt eine Erstellung fehl, kostet sie nichts.</p>
+    <p>Bezahlung über Stripe. Die Kartendaten gibst du nur bei Stripe ein; KV-Learn sieht sie nie. Das Guthaben gilt nur für KI-Erstellungen in dieser App.</p>
+    </details>
+    <div id="credit-ledger"></div>
+  </section>` : ''}
+
   <section class="card">
     <h2 style="margin-top:0">Daten und Sicherung</h2>
     ${isCloud()
@@ -112,7 +124,6 @@ export function settingsView(el) {
       <li><strong>Android (Chrome):</strong> Menü ⋮, dann «App installieren» bzw. «Zum Startbildschirm hinzufügen».</li>
       <li><strong>Computer (Chrome oder Edge):</strong> In der Adresszeile auf das Installieren-Symbol klicken oder im Menü «App installieren» wählen.</li>
     </ul>
-    <button class="btn" id="logout">Abmelden</button>
   </section>` : ''}
 
   <section class="card">
@@ -129,9 +140,6 @@ export function settingsView(el) {
       await commit((d) => { d.settings.profile = { firstName, apprenticeshipYear: Number(el.querySelector('#pf-year').value), school: el.querySelector('#pf-school').value.trim() }; });
       toast('Profil gespeichert.');
     } catch (err) { toast(err.message, 'error'); }
-  });
-  el.querySelector('#logout2')?.addEventListener('click', async () => {
-    try { await signOut(); location.reload(); } catch (e) { toast(e.message, 'error'); }
   });
   el.querySelector('#logout')?.addEventListener('click', async () => {
     try { await signOut(); location.reload(); } catch (e) { toast(e.message, 'error'); }
@@ -150,7 +158,10 @@ export function settingsView(el) {
     try { await commit((d) => { d.settings.aiBilling = b.dataset.billing; }); rerender(); } catch (e) { toast(e.message, 'error'); }
   }));
   const terms = el.querySelector('#terms-ok');
-  terms?.addEventListener('change', () => el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = !terms.checked)));
+  terms?.addEventListener('change', () => {
+    el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = !terms.checked));
+    const hint = el.querySelector('#pack-hint'); if (hint) hint.hidden = terms.checked;
+  });
   el.querySelectorAll('[data-pack]').forEach((b) => b.addEventListener('click', async () => {
     if (!terms?.checked) return toast('Bitte zuerst die Bedingungen akzeptieren.', 'error');
     el.querySelectorAll('[data-pack]').forEach((x) => (x.disabled = true));

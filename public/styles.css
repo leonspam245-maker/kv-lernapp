@@ -676,3 +676,47 @@ input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0
 
 /* Handy: Hintergrundwort nur als dezentes Wasserzeichen, damit Titel und Prüfungsname lesbar bleiben */
 @media (max-width: 640px) { .hero-bg { opacity: .22; } }
+
+/* =====================================================================
+   Lesbarkeit: Lesetext in Arial. Die Schreibmaschinenschrift bleibt als
+   Akzent für Navigation, Knöpfe, Labels, Kennzeichnungen und Kurzangaben.
+   ===================================================================== */
+:root { --sans: Arial, "Helvetica Neue", Helvetica, sans-serif; }
+body, input, select, textarea, .toast, .check, .option, .notice, .unit-task, .hint { font-family: var(--sans); }
+button, .btn, .tabs button, .nav a, .eyebrow, .badge, .ref, .kind, .meta, .save-state, .hero-date, .hero-sub, .hero-meta, .page-head p, summary { font-family: var(--mono); }
+p, li, dd, .unit-task, .option { line-height: 1.55; }
+.card p, .card li, .tile p { max-width: 72ch; }
+
+/* Auswahlfelder mit eigenem Pfeil statt dem des Browsers */
+select { -webkit-appearance: none; appearance: none; padding-right: 42px; background-repeat: no-repeat; background-position: right 14px center; background-size: 14px 9px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%231D1B1A' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+/* Reine Information ist neutral, Farbe bleibt Warnungen und Fehlern vorbehalten */
+.notice-info { background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2, var(--ink)); }
+
+/* Einklappbare Zusatzinformationen */
+.more { margin: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.more summary { cursor: pointer; font-weight: 700; padding: 12px 0; min-height: 44px; }
+.more summary:hover { color: var(--accent-ink); }
+.more[open] summary { padding-bottom: 4px; }
+.more > :last-child { margin-bottom: 14px; }
+.more + .more { border-top: 0; margin-top: -14px; }
+
+/* Einstellungen: Konto-Zeile und Guthaben */
+.account-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+.account-row span { overflow-wrap: anywhere; }
+.credit-box { align-items: flex-start; }
+.credit-buy { flex: 1 1 320px; }
+.credit-buy .check { padding-top: 0; }
+.credit-buy .row { margin-top: 6px; }
+
+/* Handy: Lernplan-Einheiten kompakter, beide Knöpfe nebeneinander */
+@media (max-width: 640px) {
+  .unit { padding: 14px 14px; }
+  .today-unit { gap: 10px; }
+  .unit-task { font-size: 1rem; }
+  .unit-actions { flex-wrap: nowrap; gap: 6px; margin-top: 10px; }
+  .unit-actions .btn { padding: 0 12px; }
+}
+/* Sehr schmale Geräte: Beschriftungen der Navigation nicht abschneiden */
+@media (max-width: 380px) { .nav a { font-size: .56rem; letter-spacing: -0.02em; } }

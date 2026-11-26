@@ -1,7 +1,7 @@
 // Einstieg: Router, Startseite, Fächer, Themen und Unterlagen.
 import { store, loadAll, commit, byId, subjectName, topicName, topicsOf, sourcesOf, sync, refreshIfStale } from './store.js';
 import { esc, uid, todayISO, fmtDate, fmtDateLong, fmtDateShort, fmtDateTime, diffDays, plural } from './util.js';
-import { toast, confirmDialog, refChips, originBadge, demoBadge, emptyState, progressBar, renderMarkdown, ORIGIN, KIND_MYKV } from './ui.js';
+import { toast, clearStaleToasts, confirmDialog, refChips, originBadge, demoBadge, emptyState, progressBar, renderMarkdown, ORIGIN, KIND_MYKV } from './ui.js';
 import { topicStats } from './srs.js';
 import { KIND_LABEL } from './planner.js';
 import { importView } from './import.js';
@@ -84,7 +84,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('focus', checkForUpdates);
 setInterval(() => { if (document.visibilityState === 'visible') checkForUpdates(); }, 60000);
 
-window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { clearStaleToasts(); route(); window.scrollTo(0, 0); });
 window.addEventListener('beforeunload', (e) => { if (leaveGuard?.()) { e.preventDefault(); e.returnValue = ''; } });
 
 // ---------- Gemeinsame Aktionen ----------
