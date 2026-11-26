@@ -99,14 +99,14 @@ function block(b) {
       ? `<table class="leer"><thead><tr>${b.head.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${(b.rows || []).map((r) => `<tr>${r.map((c) => `<td>${rich(c)}</td>`).join('')}</tr>`).join('')}${Array.from({ length: b.leer ?? 6 }, () => `<tr>${b.head.map(() => '<td>&nbsp;</td>').join('')}</tr>`).join('')}</tbody></table>`
       : `<div class="felder">${b.items.map((i) => `<div class="feld"><span>${rich(i)}</span><div class="lines">${'<div></div>'.repeat(b.linien ?? 1)}</div></div>`).join('')}</div>`);
     case 'karten': {
-      // Je Seite 10 Karten (2 × 5); Rückseiten auf der folgenden Seite gespiegelt, damit sie beim beidseitigen Druck passen
+      // Je Seite 8 Karten (2 × 4, passt auch unter den Kopf der ersten Seite); Rückseiten auf der folgenden Seite gespiegelt, damit sie beim beidseitigen Druck passen
       const pages = [];
-      for (let i = 0; i < b.items.length; i += 10) pages.push(b.items.slice(i, i + 10));
+      for (let i = 0; i < b.items.length; i += 8) pages.push(b.items.slice(i, i + 8));
       return (b.h ? h : '') + pages.map((pg, pi) => {
         const rows = []; for (let i = 0; i < pg.length; i += 2) rows.push(pg.slice(i, i + 2));
         const front = rows.map((r) => `<div class="krow">${r.map(([v]) => `<div class="karte vorne">${rich(v)}</div>`).join('')}${r.length < 2 ? '<div class="karte leer"></div>' : ''}</div>`).join('');
         const back = rows.map((r) => `<div class="krow">${r.length < 2 ? '<div class="karte leer"></div>' : ''}${r.slice().reverse().map(([, z]) => `<div class="karte hinten">${rich(z)}</div>`).join('')}</div>`).join('');
-        return `<section class="kartenseite${pi === 0 ? ' erste' : ''}"><p class="kinfo">Vorderseiten – entlang der Linien ausschneiden</p>${front}</section><section class="kartenseite"><p class="kinfo">Rückseiten – für beidseitigen Druck gespiegelt angeordnet</p>${back}</section>`;
+        return `<section class="kartenseite${pi === 0 ? ' erste' : ''}"><p class="kinfo">Vorderseiten – entlang der Linien ausschneiden. Beidseitig drucken (an der langen Kante spiegeln).</p>${front}</section><section class="kartenseite"><p class="kinfo">Rückseiten – für beidseitigen Druck gespiegelt angeordnet</p>${back}</section>`;
       }).join('');
     }
     default: throw new Error('Unbekannter Block: ' + b.type);
@@ -149,13 +149,15 @@ function html(d, variant = null) {
       body += aufgabenHtml(d);
     }
   } else body += d.blocks.map(block).join('');
+  // Reine Kartensätze ohne Schlussnotiz: sonst entsteht eine zusätzliche Seite und Vorder-/Rückseiten verrutschen beim Duplexdruck
+  const onlyCards = d.blocks?.length === 1 && d.blocks[0].type === 'karten' && d.kind === 'blatt';
   const note = d.modul
     ? `Eigene Zusammenfassung von KV-Learn in eigenen Worten, abgestimmt auf das myKV-Modul «${esc(d.modul)}» und den Bildungsplan Kauffrau/Kaufmann EFZ 2023.`
     : 'Erstellt von KV-Learn in eigenen Worten, abgestimmt auf den Bildungsplan Kauffrau/Kaufmann EFZ 2023 und die Lernmodule in myKV.';
   return `<!doctype html><html lang="de-CH"><head><meta charset="utf-8"><style>${CSS}</style></head><body><div class="page">
     <header class="band"><div class="row"><span class="logo">${LOGO}</span><span class="kind">${esc(kind)}</span></div>
       <p class="crumb">${esc(crumb)}</p><h1>${esc(variant === 'loesungen' ? `Lösungen: ${d.title}` : d.title)}</h1>${d.lead && variant !== 'loesungen' ? `<p class="lead">${rich(d.lead)}</p>` : ''}</header>
-    <main>${body}<p class="note">${note} Stand: 26.11.2026. Ohne Gewähr; massgebend sind die Unterlagen deiner Schule.</p></main>
+    <main>${body}${onlyCards ? '' : `<p class="note">${note} Stand: 26.11.2026. Ohne Gewähr; massgebend sind die Unterlagen deiner Schule.</p>`}</main>
   </div></body></html>`;
 }
 
