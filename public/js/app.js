@@ -10,6 +10,7 @@ import { planListView, examFormView, examPlanView, toggleUnit, unitStartLink, ro
 import { settingsView } from './settings.js';
 import { ablageView } from './ablage.js';
 import { paketeView } from './pakete.js';
+import { klassenView } from './klassen.js';
 import { initBackend, currentUser, isCloud, isRecovery, recoveryLinkError, justConfirmed } from './backend.js';
 import { loginView, newPasswordView } from './auth.js';
 
@@ -31,6 +32,9 @@ const ROUTES = [
   [/^pruefung\/([\w-]+)\/bearbeiten$/, examFormView, 'plan'],
   [/^pruefung\/([\w-]+)$/, examPlanView, 'plan'],
   [/^pakete$/, paketeView, 'faecher'],
+  [/^klassen$/, klassenView, 'ablage'],
+  [/^klassen\/([0-9a-f-]{36})$/, klassenView, 'ablage'],
+  [/^ablage\/(kl\/[0-9a-f-]{36})$/, ablageView, 'ablage'],
   [/^ablage$/, ablageView, 'ablage'],
   [/^ablage\/(lj[123](?:\/[a-z0-9-]+)?)$/, ablageView, 'ablage'],
   [/^einstellungen$/, settingsView, 'einstellungen'],

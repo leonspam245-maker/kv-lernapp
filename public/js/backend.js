@@ -297,3 +297,67 @@ export async function paketLaden(id) {
   if (!/^[a-z0-9-]{1,80}$/.test(id)) throw libError('Ungültiges Lernpaket.');
   return paketDatei(`${id}.json`);
 }
+
+// ---------- Klassen & Lerngruppen (nur online, nur Schulkonten) ----------
+const classError = (error, fallback) => {
+  const m = error?.message || '';
+  if (/Code unbekannt/.test(m)) return libError('Diesen Klassencode gibt es nicht. Bitte prüfen.');
+  if (/voll/.test(m)) return libError('Diese Klasse ist voll (höchstens 60 Mitglieder).');
+  if (/10 eigene/.test(m)) return libError('Du kannst höchstens 10 eigene Klassen erstellen.');
+  if (/Schul-E-Mail/.test(m)) return libError('Klassen gibt es nur für Konten mit bestätigter Schul-E-Mail-Adresse.');
+  return libError(fallback);
+};
+const myId = async () => (await sb.auth.getSession()).data.session?.user?.id;
+/** Eigene Klassen (alle, in denen man Mitglied ist) */
+export async function listClasses() {
+  if (!isCloud()) return [];
+  const { data, error } = await sb.from('classes').select('id, name, code, owner_id, created_at').order('created_at', { ascending: true });
+  if (error) throw libError('Die Klassen konnten nicht geladen werden.');
+  return data || [];
+}
+export async function createClass(name) {
+  const { data, error } = await sb.rpc('create_class', { p_name: name });
+  if (error) throw classError(error, 'Die Klasse konnte nicht erstellt werden.');
+  return data;
+}
+export async function joinClass(code) {
+  const { data, error } = await sb.rpc('join_class', { p_code: code });
+  if (error) throw classError(error, 'Beitritt nicht möglich.');
+  return data;
+}
+/** Klasse mit Mitgliedern, Zielen und Wochenstatistik */
+export async function classDetail(id, week) {
+  const [cl, members, goals, stats] = await Promise.all([
+    sb.from('classes').select('id, name, code, owner_id, created_at').eq('id', id).maybeSingle(),
+    sb.from('class_members').select('class_id, user_id, display_name, share_stats, role, joined_at').eq('class_id', id),
+    sb.from('class_goals').select('id, class_id, title, due_date, created_by, created_at').eq('class_id', id).order('created_at', { ascending: true }),
+    sb.from('class_stats').select('class_id, user_id, week, cards, quiz_points, quiz_max, updated_at').eq('class_id', id).eq('week', week),
+  ]);
+  if (cl.error || members.error || goals.error || stats.error) throw libError('Die Klasse konnte nicht geladen werden.');
+  return { cls: cl.data, members: members.data || [], goals: goals.data || [], stats: stats.data || [], me: await myId() };
+}
+export async function setShareStats(classId, share) {
+  const { error } = await sb.from('class_members').update({ share_stats: share }).eq('class_id', classId).eq('user_id', await myId());
+  if (error) throw libError('Die Einstellung konnte nicht gespeichert werden.');
+}
+export async function publishStats(classId, week, stats) {
+  const { error } = await sb.from('class_stats').upsert({ class_id: classId, user_id: await myId(), week, ...stats, updated_at: new Date().toISOString() });
+  if (error) throw libError('Deine Wochenstatistik konnte nicht gespeichert werden.');
+}
+export async function addGoal(classId, title, dueDate) {
+  const { error } = await sb.from('class_goals').insert({ class_id: classId, title, due_date: dueDate || null });
+  if (error) throw libError('Das Ziel konnte nicht gespeichert werden.');
+}
+export async function deleteGoal(id) {
+  const { error } = await sb.from('class_goals').delete().eq('id', id);
+  if (error) throw libError('Das Ziel konnte nicht gelöscht werden.');
+}
+export async function removeMember(classId, userId) {
+  const { error } = await sb.from('class_members').delete().eq('class_id', classId).eq('user_id', userId);
+  if (error) throw libError('Das Mitglied konnte nicht entfernt werden.');
+}
+export async function leaveClass(classId) { return removeMember(classId, await myId()); }
+export async function deleteClass(classId) {
+  const { error } = await sb.from('classes').delete().eq('id', classId);
+  if (error) throw libError('Die Klasse konnte nicht gelöscht werden.');
+}

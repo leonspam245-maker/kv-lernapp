@@ -52,7 +52,7 @@
     const uid = () => load().session?.user.id;
     // ---------- Gemeinsame Ablage (wie Row Level Security der echten Datenbank) ----------
     const isAdmin = (db) => db.admin === uid();
-    const visible = (db, i) => !i.hidden || i.uploader_id === uid() || isAdmin(db);
+    const visible = (db, i) => (!i.folder.startsWith('kl/') || (db.class_members || []).some((m) => m.class_id === i.folder.slice(3) && m.user_id === uid())) && (!i.hidden || i.uploader_id === uid() || isAdmin(db));
     const err = (message, code) => ({ data: null, error: { message, code } });
     function library(table) {
       if (table === 'library_reports') return {
@@ -83,7 +83,8 @@
           if (!me) return err('nicht angemeldet', '42501');
           if (op === 'insert') {
             const r = patch;
-            if (!/^lj[123]\/[a-z0-9-]{1,40}$/.test(r.folder) || r.file_path.split('/')[0] !== me || !r.rights_confirmed_at) return err('new row violates row-level security policy', '42501');
+            const klOk = (f) => !f.startsWith('kl/') || (db.class_members || []).some((m) => m.class_id === f.slice(3) && m.user_id === me);
+            if (!(/^lj[123]\/[a-z0-9-]{1,40}$/.test(r.folder) || /^kl\/[0-9a-f-]{36}$/.test(r.folder)) || !klOk(r.folder) || r.file_path.split('/')[0] !== me || !r.rights_confirmed_at) return err('new row violates row-level security policy', '42501');
             const u = db.users.find((x) => x.id === me);
             const item = { ...r, id: 'it' + (db.items.length + 1), uploader_id: me, uploader_name: u?.user_metadata?.firstName || 'Anonym', hidden: false, report_count: 0, created_at: new Date().toISOString() };
             db.items.push(item); save(db); return { data: item, error: null };
@@ -140,6 +141,49 @@
         return { data: new Blob([raw], { type: 'application/json' }), error: null };
       },
     };
+    // Klassen (wie RLS: nur Mitglieder sehen Klasse, Mitglieder, Ziele; Statistik nur eigene oder freigegebene)
+    function klassen(table) {
+      const filters = []; let op = 'select'; let patch = null; let single = false;
+      const isMember = (db, cid) => (db.class_members || []).some((m) => m.class_id === cid && m.user_id === uid());
+      const q = {
+        select() { return q; }, order() { return q; },
+        eq(col, v) { filters.push([col, v]); return q; },
+        insert(row) { op = 'insert'; patch = row; return q; }, upsert(row) { op = 'upsert'; patch = row; return q; },
+        update(p) { op = 'update'; patch = p; return q; }, delete() { op = 'delete'; return q; },
+        async maybeSingle() { single = true; return q.run(); },
+        then(resolve, reject) { q.run().then(resolve, reject); },
+        async run() {
+          await delay(); const db = load(); const me = uid();
+          db[table] ||= []; const rows = db[table];
+          const match = (r) => filters.every(([c, v]) => r[c] === v);
+          if (op === 'select') {
+            let out = rows.filter(match).filter((r) => {
+              const cid = table === 'classes' ? r.id : r.class_id;
+              if (!isMember(db, cid)) return table === 'class_stats' && r.user_id === me;
+              if (table === 'class_stats') return r.user_id === me || (db.class_members || []).some((m) => m.class_id === r.class_id && m.user_id === r.user_id && m.share_stats);
+              return true;
+            });
+            return { data: single ? out[0] || null : out, error: null };
+          }
+          if (op === 'insert' || op === 'upsert') {
+            const row = { ...patch }; if (table === 'class_goals') { row.id ||= 'g' + Date.now() + Math.random().toString(36).slice(2, 6); row.created_by = me; row.created_at = new Date().toISOString(); }
+            if (!isMember(db, row.class_id) || (row.user_id && row.user_id !== me)) return err('new row violates row-level security policy', '42501');
+            if (op === 'upsert') { const i = rows.findIndex((r) => r.class_id === row.class_id && r.user_id === row.user_id && r.week === row.week); if (i >= 0) rows[i] = { ...rows[i], ...row }; else rows.push(row); }
+            else rows.push(row);
+            save(db); return { data: null, error: null };
+          }
+          if (op === 'update') { rows.filter(match).forEach((r) => { if (r.user_id === me) Object.assign(r, patch); }); save(db); return { data: null, error: null }; }
+          if (op === 'delete') {
+            const owner = (cid) => (db.classes || []).some((c) => c.id === cid && c.owner_id === me);
+            db[table] = rows.filter((r) => !(match(r) && (table === 'classes' ? r.owner_id === me : table === 'class_members' ? r.role !== 'owner' && (r.user_id === me || owner(r.class_id)) : r.created_by === me || owner(r.class_id))));
+            if (table === 'classes') for (const t of ['class_members', 'class_goals', 'class_stats']) db[t] = (db[t] || []).filter((r) => db.classes.some((c) => c.id === r.class_id));
+            save(db); return { data: null, error: null };
+          }
+          return { data: null, error: null };
+        },
+      };
+      return q;
+    }
     return {
       auth,
       from(table) {
@@ -152,6 +196,7 @@
           return q;
         }
         if (table === 'library_items' || table === 'library_reports') return library(table);
+        if (['classes', 'class_members', 'class_goals', 'class_stats'].includes(table)) return klassen(table);
         if (table !== 'app_state') throw new Error('unbekannte Tabelle');
         return {
           select(cols) {
@@ -169,6 +214,22 @@
       },
       storage: { from: (bucket) => (bucket === 'pakete' ? paketStorage : storage) },
       async rpc(name, args = {}) {
+        if (name === 'create_class' || name === 'join_class') {
+          await delay(); const db = load(); const me = uid(); db.classes ||= []; db.class_members ||= [];
+          if (!me || !member()) return err('Nur mit bestätigter Schul-E-Mail-Adresse', '42501');
+          const u = db.users.find((x) => x.id === me); const nm = u?.user_metadata?.firstName || 'Anonym';
+          if (name === 'create_class') {
+            const id = '00000000-0000-4000-8000-' + String(db.classes.length + 1).padStart(12, '0');
+            const code = 'K' + String(db.classes.length + 1).padStart(5, '2').replace(/[01]/g, '2');
+            db.classes.push({ id, name: args.p_name.trim(), code, owner_id: me, created_at: new Date().toISOString() });
+            db.class_members.push({ class_id: id, user_id: me, display_name: nm, share_stats: true, role: 'owner', joined_at: new Date().toISOString() });
+            save(db); return { data: { id, code }, error: null };
+          }
+          const c = db.classes.find((x) => x.code === String(args.p_code).trim().toUpperCase());
+          if (!c) return err('Code unbekannt', 'P0002');
+          if (!db.class_members.some((m) => m.class_id === c.id && m.user_id === me)) db.class_members.push({ class_id: c.id, user_id: me, display_name: nm, share_stats: false, role: 'member', joined_at: new Date().toISOString() });
+          save(db); return { data: c.id, error: null };
+        }
         await delay();
         if (name === 'is_admin') return { data: Boolean(uid()) && load().admin === uid(), error: null };
         if (name === 'school_domains') return { data: load().config?.domains || [], error: null };

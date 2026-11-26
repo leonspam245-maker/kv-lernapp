@@ -3,7 +3,7 @@
 import { store } from './store.js';
 import { esc, fmtDate, norm, plural } from './util.js';
 import { toast, confirmDialog, emptyState } from './ui.js';
-import { isCloud, isSchoolMember, listLibrary, isLibraryAdmin, uploadLibraryItem, libraryFileUrl, libraryFile, reportLibraryItem, deleteLibraryItem, setLibraryHidden } from './backend.js';
+import { isCloud, isSchoolMember, listClasses, listLibrary, isLibraryAdmin, uploadLibraryItem, libraryFileUrl, libraryFile, reportLibraryItem, deleteLibraryItem, setLibraryHidden } from './backend.js';
 import { importFromLibrary } from './import.js';
 import { setLeaveGuard } from './app.js';
 import { MYKV } from './mykv-struktur.js';
@@ -96,6 +96,7 @@ export function ablageView(el, param = '', query = {}) {
       return;
     }
     if (!param) overview(el);
+    else if (/^kl\/[0-9a-f-]{36}$/.test(param)) classFolderView(el, param);
     else if (/^lj[123]$/.test(param)) yearView(el, param);
     else if (folderInfo(param)) folderView(el, param);
     else el.innerHTML = emptyState('Ordner nicht gefunden', 'Diesen Ordner gibt es in der Ablage nicht.', '<a class="btn" href="#/ablage">Zur Ablage</a>');
@@ -121,7 +122,14 @@ function overview(el) {
         <p class="meta">${plural(countIn(y), 'Datei', 'Dateien')}</p>
         <ul class="list">${foldersOf(y).map((f) => folderLink(f)).join('')}</ul>
       </section>`).join('')}</div>
+    <div id="lib-klassen"></div>
     ${rulesHtml()}`;
+  listClasses().then((cls) => {
+    const box = el.querySelector('#lib-klassen');
+    if (!box) return;
+    box.innerHTML = `<section class="card ablage-klassen"><div class="tile-head"><h2>Klassenordner</h2><a class="btn-link" href="#/klassen">${cls.length ? 'Klassen verwalten' : 'Klasse erstellen oder beitreten'}</a></div>
+      ${cls.length ? `<ul class="list">${cls.map((c) => { const n = cache.items.filter((i) => i.folder === `kl/${c.id}`).length; return `<li><a class="list-link" href="#/ablage/kl/${esc(c.id)}"><span><span class="title">${esc(c.name)}</span><br><span class="meta">Nur für Mitglieder dieser Klasse sichtbar</span></span><span class="badge${n ? ' badge-accent' : ''}">${n}</span><span aria-hidden="true">›</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Teile Unterlagen nur mit deiner Klasse oder Lerngruppe.</p>'}</section>`;
+  }).catch(() => {});
   const q = el.querySelector('#lib-q');
   q.addEventListener('input', () => {
     const t = norm(q.value);
@@ -143,6 +151,25 @@ function yearView(el, year) {
   el.innerHTML = `
     <div class="page-head"><div><div class="eyebrow"><a href="#/ablage">Ablage</a></div><h1>${yearLabel(year)}</h1><p>${plural(countIn(year), 'Datei', 'Dateien')} in ${foldersOf(year).length} Ordnern</p></div></div>
     <section class="card"><ul class="list">${foldersOf(year).map((f) => folderLink(f)).join('')}</ul></section>`;
+}
+
+async function classFolderView(el, folder) {
+  const cls = (await listClasses()).find((c) => `kl/${c.id}` === folder);
+  if (!cls) { el.innerHTML = emptyState('Klassenordner nicht gefunden', 'Du bist kein Mitglied dieser Klasse.', '<a class="btn" href="#/klassen">Zu den Klassen</a>'); return; }
+  const items = cache.items.filter((i) => i.folder === folder);
+  el.innerHTML = `
+    <div class="page-head"><div><div class="eyebrow"><a href="#/ablage">Ablage</a> › <a href="#/klassen/${esc(cls.id)}">Klasse</a></div><h1>${esc(cls.name)}</h1><p>Klassenordner – nur Mitglieder dieser Klasse sehen die Dateien.</p></div>
+      <button class="btn btn-primary" id="lib-add" aria-expanded="false">Datei hochladen</button></div>
+    <div id="lib-upload"></div>
+    <section class="card">${items.length ? itemList(items) : emptyState('Noch leer', 'Teile Zusammenfassungen oder Aufträge mit deiner Klasse.')}</section>`;
+  const btn = el.querySelector('#lib-add');
+  btn.addEventListener('click', () => {
+    const box = el.querySelector('#lib-upload');
+    const open = !box.innerHTML;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) uploadForm(box, folder, () => classFolderView(el, folder)); else { box.innerHTML = ''; setLeaveGuard(null); }
+  });
+  bindItems(el, () => classFolderView(el, folder));
 }
 
 function folderView(el, folder) {
@@ -264,13 +291,14 @@ function reportForm(box, item) {
 
 function uploadForm(box, folder, onDone) {
   const year = folder.split('/')[0];
+  const fixed = folder.startsWith('kl/'); // Klassenordner: kein Wechsel von Lehrjahr/Ordner
   box.innerHTML = `<section class="card ablage-upload">
-    <h2>Datei in die Ablage hochladen</h2>
+    <h2>${fixed ? 'Datei in den Klassenordner hochladen' : 'Datei in die Ablage hochladen'}</h2>
     <form id="lib-form" autocomplete="off" novalidate>
-      <div class="grid grid-2">
+      ${fixed ? `<input type="hidden" name="folder" value="${esc(folder)}">` : `<div class="grid grid-2">
         <div class="field"><label for="lib-year">Lehrjahr</label><select id="lib-year">${YEARS.map(([y, l]) => `<option value="${y}" ${y === year ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label for="lib-folder">Ordner</label><select id="lib-folder" name="folder"></select></div>
-      </div>
+      </div>`}
       <div class="field"><span class="label">Datei</span>
         <div class="ablage-file"><label class="btn" for="lib-file">Datei auswählen</label><input type="file" id="lib-file" name="file" accept="${ACCEPT}" hidden><span class="name muted" id="lib-fname">Keine Datei ausgewählt</span></div>
         <p class="hint">PDF, Word, PowerPoint, Excel, Text oder Bild (PNG, JPG), höchstens 20 MB</p></div>
@@ -295,8 +323,7 @@ function uploadForm(box, folder, onDone) {
     const same = `${y}/${keep.split('/')[1]}`;
     if (allFolders(y).some((f) => f.id === same)) sel.value = same;
   };
-  fillFolders();
-  form.querySelector('#lib-year').addEventListener('change', fillFolders);
+  if (!fixed) { fillFolders(); form.querySelector('#lib-year').addEventListener('change', fillFolders); }
   // Titel aus dem Dateinamen vorschlagen, solange er nicht von Hand geändert wurde
   let autoTitle = '';
   form.title.addEventListener('input', () => { autoTitle = null; });

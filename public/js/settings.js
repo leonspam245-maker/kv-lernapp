@@ -44,6 +44,7 @@ export function settingsView(el) {
     </form>
     <p class="small muted" style="margin:6px 0 0">Angemeldet als ${esc(store.user?.email || '')} · <button type="button" class="btn-link" id="logout2">Abmelden</button></p>
   </section>
+  ${isCloud() ? `<section class="card"><div class="row between"><div><h2 style="margin:0">Klassen & Lerngruppen</h2><p class="small muted" style="margin:4px 0 0">Mit dem Code einer Klasse beitreten oder eine eigene Lerngruppe erstellen.</p></div><a class="btn" href="#/klassen">Zu den Klassen</a></div></section>` : ''}
   <section class="card">
     <h2 style="margin-top:0">KI-Dienst für Lerninhalte (optional)</h2>
     <p>Die App funktioniert vollständig ohne KI: Import, Lernplan, Karteikarten sowie Merkblatt, Quiz und Probeprüfung aus deinen Unterlagen werden lokal erstellt. Optional formuliert ein KI-Dienst verständlichere Merkblätter, abwechslungsreichere Fragen und gekennzeichnete eigene Beispiele.</p>

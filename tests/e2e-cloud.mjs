@@ -478,6 +478,67 @@ try {
     await c.close();
   });
 
+  await check('Klassen: erstellen, Code teilen, beitreten, Ziele, freiwillige Rangliste, Klassenordner nur für Mitglieder', async () => {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const p = await c.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.goto(BASE + '/');
+    const all = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith('mock-')).map((k) => [k, localStorage.getItem(k)])));
+    await p.evaluate((ls) => { for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v); }, all);
+    // Lea erstellt eine Klasse
+    await p.goto(BASE + '/#/einstellungen'); await p.reload();
+    await p.click('a[href="#/klassen"]');
+    await p.fill('#create-name', 'KV Chur 2a');
+    await p.click('#create button');
+    await p.waitForSelector('.class-code');
+    const code = (await p.innerText('.class-code')).trim();
+    assert.match(code, /^[A-Z2-9]{6}$/);
+    assert.match(await p.innerText('.ranking'), /Lea \(du\)/);
+    await p.fill('#goal-title', 'Kaufvertrag-Quiz mit 80 % lösen');
+    await p.click('#goal button');
+    await p.waitForSelector('.goals li');
+    await assertReadable(p, 'Klasse');
+    await p.screenshot({ path: path.join(SHOTS, 'cloud-klasse.png'), fullPage: true });
+    const classId = (await p.evaluate(() => location.hash)).split('/').pop();
+    // Tim (neues Konto) tritt mit dem Code bei
+    await p.evaluate(() => { const st = JSON.parse(localStorage.getItem('mock-supabase')); st.session = null; localStorage.setItem('mock-supabase', JSON.stringify(st)); });
+    await p.goto(BASE + '/'); await p.waitForSelector('#auth-form');
+    await p.click('#auth-switch');
+    await p.fill('#auth-name', 'Tim'); await p.fill('#auth-email', 'tim@example.ch');
+    await p.fill('#auth-pw', 'tim-passwort-42'); await p.fill('#auth-pw2', 'tim-passwort-42');
+    await p.check('#auth-consent'); await p.click('#auth-submit');
+    await p.waitForSelector('.home-grid');
+    await p.goto(BASE + '/#/klassen'); await p.waitForSelector('#join-code');
+    await p.fill('#join-code', 'ZZZZZZ'); await p.click('#join button');
+    await p.waitForSelector('.toast:has-text("Klassencode gibt es nicht")');
+    await p.fill('#join-code', code.toLowerCase()); await p.click('#join button');
+    await p.waitForSelector('.ranking');
+    const rank = await p.innerText('.ranking');
+    assert.match(rank, /Lea/); assert.match(rank, /Tim \(du\)[\s\S]*nur für dich sichtbar/);
+    assert.match(await p.innerText('.goals'), /Kaufvertrag-Quiz/);
+    assert.equal(await p.locator('#delete-class').count(), 0, 'nur die Erstellerin kann löschen');
+    await p.check('#share');
+    await p.waitForFunction(() => !/nur für dich sichtbar/.test(document.querySelector('.ranking')?.innerText || ''));
+    // Klassenordner in der Ablage
+    await p.goto(BASE + '/#/ablage'); await p.waitForSelector('.ablage-klassen');
+    assert.match(await p.innerText('.ablage-klassen'), /KV Chur 2a/);
+    await p.click(`a[href="#/ablage/kl/${classId}"]`);
+    await p.waitForFunction(() => /KV Chur 2a/.test(document.querySelector('h1')?.textContent || ''));
+    await p.click('#lib-add');
+    assert.equal(await p.locator('#lib-year').count(), 0, 'Klassenordner fest vorgegeben');
+    await p.setInputFiles('#lib-file', path.join(ROOT, 'samples', 'beispiel-handout-vertragsrecht.pdf'));
+    await p.check('#lib-rights'); await p.click('#lib-send');
+    await p.waitForSelector('.ablage-items li');
+    // Verlassen: danach weder Klasse noch Klassenordner sichtbar
+    await p.goto(BASE + `/#/klassen/${classId}`); await p.waitForSelector('#leave');
+    p.once('dialog', () => {});
+    await p.click('#leave'); await p.click('dialog [value=yes]');
+    await p.waitForFunction(() => location.hash === '#/klassen');
+    await p.goto(BASE + `/#/ablage/kl/${classId}`); await p.reload();
+    await p.waitForSelector('text=Klassenordner nicht gefunden');
+    await c.close();
+  });
+
   await check('Schul-E-Mail-Adresse: Registrierung nur mit @stud.kvchur.ch, Bestätigung per E-Mail, Ablage nur für Schulkonten', async () => {
     const c = await browser.newContext(); const p = await c.newPage();
     p.on('pageerror', (e) => errors.push(e.message));

@@ -702,3 +702,17 @@ input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0
 @media (max-width: 640px) { .exam-timer { width: 100%; margin-top: 10px; } }
 /* Laufender Timer bleibt beim Scrollen sichtbar */
 .exam-timer .timer-clock { position: fixed; top: calc(var(--bar-h) + 12px); right: 16px; z-index: 25; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+
+/* ---------- Klassen ---------- */
+.class-code { font-family: "Courier New", monospace; letter-spacing: .12em; font-size: 1.05em; }
+.ranking { list-style: none; margin: 0 0 12px; padding: 0; }
+.ranking li { display: grid; grid-template-columns: 36px 1fr auto; grid-template-areas: "rank who pts" "rank detail detail"; gap: 0 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.ranking li:last-child { border-bottom: 0; }
+.ranking .rank { grid-area: rank; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--paper-2); font-weight: 700; }
+.ranking li:first-child .rank { background: var(--ink); color: var(--paper); }
+.ranking .who { grid-area: who; font-weight: 700; }
+.ranking .pts { grid-area: pts; font-weight: 700; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.ranking .detail { grid-area: detail; }
+.ranking li.is-me { background: color-mix(in srgb, var(--accent) 7%, transparent); border-radius: var(--r-s); padding-left: 6px; padding-right: 6px; }
+.goal-form { margin-top: 14px; }
+.ablage-klassen { margin-top: 20px; }
