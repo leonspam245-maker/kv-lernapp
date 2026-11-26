@@ -673,3 +673,6 @@ input:focus, select:focus, textarea:focus, .paste-area:focus { box-shadow: 0 0 0
 .ablage-modules { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ablage-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; max-width: 720px; }
 .ablage-chips li { padding: 3px 10px; border-radius: var(--pill); background: var(--surface); color: var(--ink); font-size: var(--t-xs); font-weight: 700; border: 1px solid var(--line-strong); }
+
+/* Handy: Hintergrundwort nur als dezentes Wasserzeichen, damit Titel und Prüfungsname lesbar bleiben */
+@media (max-width: 640px) { .hero-bg { opacity: .22; } }

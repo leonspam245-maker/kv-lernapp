@@ -78,8 +78,10 @@ export function ablageView(el, param = '', query = {}) {
     return;
   }
   el.innerHTML = '<div class="page-head"><div><h1>Ablage</h1><p>Wird geladen …</p></div></div>';
+  // «el» wird für alle Seiten wiederverwendet: nur anzeigen, wenn die Ablage noch die offene Seite ist
+  const stillHere = () => el.isConnected && /^#\/ablage(?:[/?]|$)/.test(location.hash);
   load(Boolean(query.neu)).then(() => {
-    if (!el.isConnected) return;
+    if (!stillHere()) return;
     if (!cache.member) {
       el.innerHTML = `<div class="page-head"><div><h1>Ablage</h1></div></div>${emptyState('Nur mit Schul-E-Mail-Adresse', 'Die gemeinsame Ablage steht nur Konten offen, die mit einer bestätigten Schul-E-Mail-Adresse registriert sind. So haben nur KV-Lernende Zugang. Erstelle ein Konto mit deiner Schuladresse, oder melde dich bei info@kv-learn.app.')}`;
       return;
@@ -89,6 +91,7 @@ export function ablageView(el, param = '', query = {}) {
     else if (folderInfo(param)) folderView(el, param);
     else el.innerHTML = emptyState('Ordner nicht gefunden', 'Diesen Ordner gibt es in der Ablage nicht.', '<a class="btn" href="#/ablage">Zur Ablage</a>');
   }).catch((e) => {
+    if (!stillHere()) return;
     el.innerHTML = `<div class="page-head"><div><h1>Ablage</h1></div></div><div class="notice notice-bad"><p>${esc(e.message)}</p><button class="btn" id="retry">Erneut versuchen</button></div>`;
     el.querySelector('#retry').addEventListener('click', () => ablageView(el, param, { neu: 1 }));
   });

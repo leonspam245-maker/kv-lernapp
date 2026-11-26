@@ -43,6 +43,17 @@ test('Widersprüche zwischen Quellen werden sichtbar', () => {
   assert.equal(m.tables.length, 1, 'Vergleichstabelle übernommen');
 });
 
+test('Kein Begriff aus Satzanfängen, Beispielspalte ist kein Widerspruch', () => {
+  const handout = { id: 'h1', title: 'Handout', origin: 'pdf', topicId: 't1', pages: [{ n: 1, text: 'Formfreiheit: Verträge sind grundsätzlich an keine Form gebunden (Art. 11 OR).\nDas Tourismusbüro bestätigt am gleichen Tag. Damit ist der Vertrag zustande gekommen.' }] };
+  const aufgaben = { id: 'a1', title: 'Aufgaben', origin: 'mykv', topicId: 't1', content: '| Begriff | Beispiel |\n| --- | --- |\n| Formfreiheit | Reservation per Telefon |' };
+  const e = extract(handout);
+  assert.equal(e.defs.some((d) => d.term === 'Damit'), false, '«Damit» ist kein Begriff');
+  assert.ok(e.defs.some((d) => d.term === 'Formfreiheit'));
+  const k = collect([handout, aufgaben]);
+  assert.equal(k.conflicts.length, 0, 'Definition und Beispiel widersprechen sich nicht');
+  assert.ok(k.examples.some((x) => /Reservation per Telefon/.test(x.text)), 'Beispiel bleibt erhalten');
+});
+
 test('Quiz: abwechslungsreiche Typen und korrekte Bewertung', () => {
   const src = { id: 'q', title: 'Quizlet', origin: 'quizlet', topicId: 't1', cards: [
     { term: 'Kaufvertrag', def: 'Übergabe einer Sache und Eigentumsverschaffung gegen Kaufpreis' },

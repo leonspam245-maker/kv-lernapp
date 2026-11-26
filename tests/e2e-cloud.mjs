@@ -454,6 +454,13 @@ try {
     await p.waitForSelector('text=Nur mit Schul-E-Mail-Adresse');
     assert.equal(await p.locator('.ablage-year').count(), 0);
     await assertReadable(p, 'Ablage gesperrt');
+    // Wer weiterklickt, bevor die Ablage geladen ist, sieht die neue Seite und nicht die verspätete Ablage
+    for (const [hash, title] of [['#/einstellungen', /Einstellungen/i], ['#/faecher', /Fächer/i]]) {
+      await p.goto(BASE + '/#/ablage?neu=1');
+      await p.evaluate((h) => { location.hash = h; }, hash);
+      await p.waitForTimeout(600);
+      assert.match(await p.innerText('main h1'), title, `Ablage überschreibt ${hash} nicht`);
+    }
     await c.close();
   });
 

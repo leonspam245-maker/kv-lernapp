@@ -33,6 +33,9 @@ export function logicalLines(text) {
 
 const stripBullet = (t) => t.replace(/^([-•*–]\s+|\d+[.)]\s+)/, '').replace(/\*\*/g, '').trim();
 const wordCount = (t) => t.split(/\s+/).filter(Boolean).length;
+// Satzanfänge, die wie ein Begriff aussehen («Damit ist der Vertrag …»), aber keiner sind
+const SENTENCE_STARTS = /^(damit|somit|dabei|daher|darum|deshalb|deswegen|dadurch|dafür|dagegen|danach|dann|also|folglich|dies|diese|dieser|dieses|das|es|hier|so|jedoch|zudem|ausserdem|außerdem)$/i;
+const EXAMPLE_HEAD = /^(beispiele?|bsp\.?|praxisbeispiele?)$/i;
 const isTermLike = (t) => t.length >= 2 && t.length <= 60 && wordCount(t) <= 6 && /^[A-ZÄÖÜ0-9«"]/.test(t) && !NOT_TERMS.test(t.trim()) && !/[.!?]$/.test(t);
 const sentences = (t) => t.split(/(?<=[.!?])\s+(?=[A-ZÄÖÜ«"])/).map((s) => s.trim()).filter(Boolean);
 const cleanDef = (d) => d.trim().replace(/^[-–:]\s*/, '');
@@ -63,7 +66,13 @@ export function extract(source) {
       if (table.rows.length && table.header.length >= 3) {
         res.tables.push({ heading, header: table.header, rows: table.rows, refs: ref(seg.page), topicId: source.topicId });
       } else if (table.header.length === 2) {
-        for (const r of table.rows) if (r[0] && r[1] && isTermLike(r[0])) res.defs.push({ term: r[0], def: r[1], heading, refs: ref(seg.page), topicId: source.topicId });
+        // Spalte «Beispiel» enthält Beispiele, keine Definitionen: sonst entstünde ein scheinbarer Widerspruch zur Definition
+        const asExample = EXAMPLE_HEAD.test(table.header[1]);
+        for (const r of table.rows) {
+          if (!r[0] || !r[1] || !isTermLike(r[0])) continue;
+          if (asExample) res.examples.push({ text: `${r[0]}: ${r[1]}`, refs: ref(seg.page), own: false, topicId: source.topicId });
+          else res.defs.push({ term: r[0], def: r[1], heading, refs: ref(seg.page), topicId: source.topicId });
+        }
       }
       table = null;
     };
@@ -93,7 +102,7 @@ export function extract(source) {
       for (const s of sentences(t)) {
         let d = s.match(/^Unter (?:einem |einer |einen |dem |der |den |die |das )?(.{2,50}?) (?:versteht man|wird .{0,20}verstanden) (.{10,})$/i);
         if (!d) d = s.match(/^(?:Der |Die |Das )?([A-ZÄÖÜ][\wäöüß-]+(?: [A-ZÄÖÜ][\wäöüß-]+){0,2}) (?:ist eine?|ist der|ist die|ist das|sind|bezeichnet|bedeutet|nennt man) (.{10,})$/);
-        if (d && isTermLike(d[1])) { res.defs.push({ term: d[1].trim(), def: cleanDef(d[2]), heading, refs: ref(seg.page), topicId: source.topicId, fromSentence: true }); }
+        if (d && isTermLike(d[1]) && !SENTENCE_STARTS.test(d[1].trim())) { res.defs.push({ term: d[1].trim(), def: cleanDef(d[2]), heading, refs: ref(seg.page), topicId: source.topicId, fromSentence: true }); }
         if (EXAMPLE_RE.test(s)) res.examples.push({ text: s, refs: ref(seg.page), own: false, topicId: source.topicId });
         else if (DIFF_RE.test(s)) res.differences.push({ text: s, refs: ref(seg.page), topicId: source.topicId });
       }
